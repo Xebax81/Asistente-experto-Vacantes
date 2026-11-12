@@ -1,0 +1,20 @@
+Carpeta para los archivos de la base de conocimiento.
+
+Copiar acá, desde la carpeta del PG2 en Drive:
+
+  Grupo_5_PG2_U1_carga.cypher      script de carga del grafo (bloques 1 a 9)
+  Grupo_5_PG2_U1_consultas.cypher  consultas del PG2, como referencia
+
+Ya incluido:
+
+  S1_PI4_complemento.cypher        sinónimos de aptitudes y marcadores de S1-R02 (PI4 de S1).
+                                   Cargarlo después del script del PG2:
+                                   python -m api.main --cargar neo4j/S1_PI4_complemento.cypher
+
+Para el ZIP final del PG3 agregar también el dump de Neo4j:
+
+  neo4j-admin database dump neo4j --to-path=.
+
+El asistente no necesita estos archivos para correr (se conecta a la instancia
+que indique NEO4J_URI), pero el entregable del PG3 pide la exportación de Neo4j
+y los datos de ejemplo.

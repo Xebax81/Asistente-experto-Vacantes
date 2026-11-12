@@ -1,0 +1,3 @@
+ATENCIÓN: tu respuesta anterior fue RECHAZADA por la Validación de Fidelidad por estos motivos:
+{motivos}
+Reescribí la explicación desde cero respetando estrictamente las reglas: usá solo datos de "datos_neo4j", copiá las cifras exactas, nombrá la categoría registrada de cada candidato y citá solo ids de evidencia existentes. Respondé SOLO con el JSON.

@@ -1,0 +1,7 @@
+# Asistente Experto para Recomendación de Personal — PG3, Grupo 5 – 5K10
+# Python 3.9 o superior.
+neo4j>=5.14,<6
+numpy>=1.24
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.5

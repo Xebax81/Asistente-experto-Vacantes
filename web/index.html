@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asistente Experto · Cobertura de Vacantes Internas · Grupo 5 – 5K10</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Doto:wght@700..900&family=Azeret+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/web/estilo.css">
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <strong>ASISTENTE EXPERTO</strong>
+    <span>Recomendación de personal · Cobertura de vacantes internas · Grupo 5 – 5K10 · UTN FRM · PG3</span>
+  </div>
+  <div class="estado" id="estado" title="Estado del sistema">verificando…</div>
+</header>
+
+<main>
+  <!-- ------------------------------------------------ conversación -->
+  <section class="chat">
+    <div class="mensajes" id="mensajes">
+      <div class="msg sistema">
+        <p>Soy el punto de entrada único del sistema experto. Un <strong>prompt maestro</strong>
+           enruta lo que escribís al submódulo que corresponde:</p>
+        <ul>
+          <li><b>S1</b> interpreta un pedido de cobertura y registra la vacante.</li>
+          <li><b>S2</b> dice quién puede cubrirla y por qué alguien queda afuera.</li>
+          <li><b>S3</b> calcula la afinidad y el orden entre candidatos.</li>
+          <li><b>S4</b> explica el listado final y la evidencia que lo respalda.</li>
+        </ul>
+        <p>Si pedís cubrir una vacante <em>y</em> preguntás a quién asignar, se recorre
+           la cadena completa S1 → S2 → S3 → S4.</p>
+      </div>
+    </div>
+
+    <div class="ejemplos-barra">
+      <button type="button" class="ejemplos-toggle" id="verEjemplos"
+              aria-expanded="false" aria-controls="ejemplos">+ Casos de prueba</button>
+    </div>
+    <div class="ejemplos" id="ejemplos" hidden></div>
+
+    <form class="entrada" id="formulario">
+      <textarea id="texto" rows="2" placeholder="Escribí tu consulta…  (Enter envía, Shift+Enter hace salto de línea)"></textarea>
+      <button type="submit" id="enviar">Enviar</button>
+    </form>
+  </section>
+
+  <!-- ------------------------------------------------ trazabilidad -->
+  <aside class="panel">
+    <div class="panel-cab">
+      <h2>Trazabilidad</h2>
+      <span class="ayuda" title="Punto 7 de la consigna: fuente del conocimiento, regla utilizada, evidencia considerada, consulta ejecutada y explicación generada.">?</span>
+    </div>
+    <div id="traza" class="traza-vacia">
+      Acá se muestra, para cada respuesta: a qué submódulo se enrutó, qué extrajo el
+      modelo de lenguaje, qué consultas Cypher se ejecutaron contra Neo4j con sus
+      parámetros, y si la explicación pasó la validación de fidelidad.
+    </div>
+  </aside>
+</main>
+
+<script src="/web/app.js"></script>
+</body>
+</html>
