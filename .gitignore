@@ -15,3 +15,6 @@ pruebas/diagnostico_neo4j.log
 
 # copias que deja la app de escritorio
 Claude outputs/
+
+# borradores pendientes de decisión del grupo (no se publican)
+borradores/

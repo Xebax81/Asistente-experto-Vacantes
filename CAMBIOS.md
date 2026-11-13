@@ -199,3 +199,22 @@ con enrutamiento simulado de confianza baja devuelve la aclaración sin consulta
   E401 Valeria Núñez Baja prioridad (0,290) vs. Recomendado con reservas (0,397) por la
   representación S3→S4 (punto medio y confiabilidad).
 - `--exportar`: 406 nodos y 1052 relaciones en `neo4j/Grupo_5_PG3_export.cypher` y `.json`.
+
+### 13/11 — Tabla de candidatos de la web sin códigos
+- `web/app.js`: la tabla de candidatos traduce advertencias y aptitudes con la misma tabla de
+  nombres legibles que S4 (antes mostraba `SOLAPE_PARCIAL`, `manejo_residuos_patogenicos`),
+  muestra los deseables vencidos aparte y escribe prioridad, afinidad y confiabilidad con tres
+  decimales y coma.
+- `neo4j/Grupo_5_PG3_consultas.cypher` (nuevo): catálogo de las 40 consultas de lectura y las
+  18 plantillas de escritura del asistente, generado desde `core/consultas.py`.
+
+### 13/11 — Material de presentación (ítems k y l del ZIP) — EN BORRADOR
+- A pedido de Sebastián se movió a `borradores/presentacion/` (fuera de git) hasta consultarlo
+  con el grupo. No forma parte de la entrega por ahora.
+- `borradores/presentacion/Grupo_5_PG3_Presentacion.pptx`: 16 diapositivas con notas del
+  orador (problema, solución, arquitectura, quién decide, cinco demostraciones con capturas,
+  límites, trazabilidad, pruebas 15/15, devoluciones, evaluación y conclusiones).
+- `borradores/presentacion/Grupo_5_PG3_Infografia.pdf` y `.png`: resumen de una página.
+- `borradores/presentacion/capturas/`: capturas de la interfaz web real (index.html, app.js y
+  estilo.css del proyecto) mostrando las respuestas grabadas en `trazas/` de la corrida final del
+  13/11 (E2E-1, E2E-4, E2E-6, E2E-7, E2E-9, E2E-10, ERR-2).

@@ -83,11 +83,28 @@ function fichasDe(r) {
   return [];
 }
 
+// Nombres legibles de los códigos del grafo (los mismos que usa S4 en el servidor):
+// la tabla no muestra SOLAPE_PARCIAL ni manejo_residuos_patogenicos.
+const LEGIBLE = {
+  MARGEN_CORTO: 'margen de vigencia corto', SOLAPE_PARCIAL: 'solape parcial de horario',
+  ENTRADAS_INCOMPLETAS: 'entradas incompletas', 'DESEMPEÑO_BAJO_RECIENTE': 'desempeño bajo reciente',
+  DESEMPENO_BAJO_RECIENTE: 'desempeño bajo reciente', TRASLADO_DESCONOCIDO: 'traslado desconocido',
+  HORARIO_DESCONOCIDO: 'horario desconocido', 'DESEMPEÑO_DESCONOCIDO': 'desempeño desconocido',
+  limpieza_hospitalaria: 'limpieza hospitalaria', manejo_residuos_patogenicos: 'manejo de residuos patogénicos',
+  manejo_maquinaria_industrial: 'manejo de maquinaria industrial', trabajo_en_altura: 'trabajo en altura',
+};
+const legible = (c) => {
+  const m = String(c).match(/^(\S+)\s+(\(.*\))$/);
+  if (m) return `${legible(m[1])} ${m[2]}`;
+  return LEGIBLE[c] || String(c).replace(/_/g, ' ').toLowerCase();
+};
+const num = (x) => (x === null || x === undefined ? '–' : Number(x).toFixed(3).replace('.', ','));
+
 function afinidadTexto(f) {
   const a = f.afinidad || [];
   if (a[0] === null || a[0] === undefined) return '—';
-  if (a[0] === a[1]) return a[0].toFixed(3);
-  return `${a[0].toFixed(3)} – ${a[1].toFixed(3)}`;
+  if (a[0] === a[1]) return num(a[0]);
+  return `${num(a[0])} – ${num(a[1])}`;
 }
 
 function claseCategoria(c) {
@@ -104,14 +121,17 @@ function tablaCandidatos(r) {
     const filas = l.fichas.map((f) => {
       const notas = [];
       if (f.deseables_faltantes && f.deseables_faltantes.length) {
-        notas.push('le falta ' + f.deseables_faltantes.join(', '));
+        notas.push('le falta ' + f.deseables_faltantes.map(legible).join(', '));
       } else if (f.deseables_estado === 'SIN_DATO') {
         notas.push('deseables no evaluadas');
       }
-      if (f.advertencias && f.advertencias.length) notas.push(f.advertencias.join(', '));
-      if ((f.confiabilidad ?? 1) < 1) notas.push(`confiabilidad ${f.confiabilidad}`);
+      if (f.deseables_vencidos && f.deseables_vencidos.length) {
+        notas.push('vencida: ' + f.deseables_vencidos.map(legible).join(', '));
+      }
+      if (f.advertencias && f.advertencias.length) notas.push(f.advertencias.map(legible).join(', '));
+      if ((f.confiabilidad ?? 1) < 1) notas.push(`confiabilidad ${num(f.confiabilidad)}`);
       if (['empate tecnico', 'no determinado'].includes(f.estado_orden_con_siguiente)) {
-        notas.push(`${f.estado_orden_con_siguiente} con el siguiente: no hay un ganador`);
+        notas.push(`${f.estado_orden_con_siguiente.replace('tecnico', 'técnico')} con el siguiente: no hay un ganador`);
       }
       const empatado = ['empate tecnico', 'no determinado']
         .includes(f.estado_orden_con_siguiente);
@@ -126,7 +146,7 @@ function tablaCandidatos(r) {
         <td><b>${esc(f.empleado)}</b><span class="leg">${esc(f.legajo)}</span></td>
         <td><span class="cat ${claseCategoria(f.categoria)}">${esc(
           String(f.categoria || '').replace(/_/g, ' '))}</span></td>
-        <td class="num">${f.prioridad ?? '–'}</td>
+        <td class="num">${num(f.prioridad)}</td>
         <td class="num">${afinidadTexto(f)}</td>
         <td class="notas">${esc(notas.join(' · '))}</td>
       </tr>`;
