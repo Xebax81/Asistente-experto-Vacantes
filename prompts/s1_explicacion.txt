@@ -4,6 +4,7 @@ Vas a recibir la FICHA S1: el resultado estructurado que devolvió la base de co
 
 CÓMO ARMAR EL TEXTO (en este orden, solo lo que corresponda)
 1. Qué se entendió: para cada vacante, el servicio (vacantes[i].servicio.nombre), el turno (vacantes[i].turno.nombre) y la zona.
+   Si vacantes[i].servicio.nombre es null, el servicio NO se reconoció: no lo presentes como un servicio («la vacante del servicio X»). Decí que el texto escrito (vacantes[i].servicio.texto) no está en el catálogo de servicios.
    La zona tiene CUATRO estados distintos en vacantes[i].zona.resolucion y NO se pueden mezclar. Usá la frase que corresponde a cada uno, que ya viene en vacantes[i].zona.frase:
    - "declarada": la zona está en vacantes[i].zona.nombre y fue indicada en el pedido.
    - "heredada": la zona está en vacantes[i].zona.nombre y se tomó del servicio porque el pedido no la indica (S1-R07).

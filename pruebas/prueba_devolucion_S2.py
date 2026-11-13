@@ -152,7 +152,7 @@ def main():
             set(llm_uno['empleado']) <= set(s2_aptitud.CAMPOS_DESCARTADO))
     resp = s2_aptitud.respaldo(uno)
     chequeo('Texto de respaldo de un descartado: vencida + no pasa a S3',
-            'venció el 28/09/2026' in resp and 'no pasa a S3' in resp
+            'vencida el 28/09/2026' in resp and 'no pasa a S3' in resp
             and not validar_s2(resp, llm_uno), resp)
     apt = s2_aptitud.ficha_aptitud(
         [{'legajo': 'E102', 'nombre': 'Bruno Gómez', 'vencimiento': '2026-09-28'},

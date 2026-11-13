@@ -23,6 +23,13 @@ INTENCIONES = ('candidatos_puesto', 'situacion_empleado', 'aptitud_vigente',
                'requisitos_puesto', 'fuera_de_alcance')
 
 
+
+def _nombre(aptitud):
+    """Nombre legible de una aptitud del catálogo (manejo_residuos_patogenicos ->
+    manejo de residuos patogénicos), el mismo que usa S4."""
+    from submodulos.s4_explicacion import legible
+    return legible(aptitud)
+
 def _fecha_ref(puesto=None):
     if puesto and puesto.get('fecha_evaluacion'):
         return date.fromisoformat(str(puesto['fecha_evaluacion'])[:10])
@@ -123,7 +130,7 @@ def evaluar_puesto(grafo, puesto_id, legajos=None):
         for a in faltan:
             motivos.append({'motivo': f'aptitud faltante: {a}', 'regla': 'S2-R02',
                             'tipo': 'APTITUD_INEXISTENTE', 'aptitud': a,
-                            'frase': f'no tiene registrada la aptitud {a}'})
+                            'frase': f'no tiene registrada la aptitud {_nombre(a)}'})
 
         # S2-R03: vigencia de las excluyentes que vencen
         margen_dias, vencidas = None, []
@@ -143,8 +150,10 @@ def evaluar_puesto(grafo, puesto_id, legajos=None):
                             'tipo': 'CERTIFICACION_VENCIDA', 'aptitud': a,
                             'vencimiento': str(v)[:10],
                             'detalle': f'venció el {v}, antes de la fecha de evaluación {ref}',
-                            'frase': (f'tiene la aptitud {a}, pero su certificación venció el '
-                                      f'{_fmt(v)}, antes de la fecha de evaluación {_fmt(ref)}')})
+                            # Sin «pero» al comienzo: el LLM la encadena después de «cumple
+                            # con…, pero» y salía «…, pero tiene la aptitud X, pero…» (E2E-7).
+                            'frase': (f'tiene registrada la aptitud {_nombre(a)} con la certificación '
+                                      f'vencida el {_fmt(v)}, antes de la fecha de evaluación {_fmt(ref)}')})
 
         # S2-R04: disponibilidad de turno
         turnos = {t['turno']: t for t in p.get('turnos') or []}
@@ -198,7 +207,7 @@ def evaluar_puesto(grafo, puesto_id, legajos=None):
         # Un deseable vencido NO es un deseable faltante: la persona lo tiene, pero vencido.
         deseables_vencidos = [
             {'aptitud': a, 'vencimiento': str(poseidas[a])[:10],
-             'frase': f'tiene la aptitud deseable {a}, pero venció el {_fmt(poseidas[a])}'}
+             'frase': f'tiene la aptitud deseable {_nombre(a)}, vencida el {_fmt(poseidas[a])}'}
             for a in sorted(deseables & set(poseidas))
             if poseidas[a] and date.fromisoformat(str(poseidas[a])[:10]) < ref]
         estado = 'valido' if not motivos else 'descartado'
@@ -375,7 +384,7 @@ def ficha_aptitud(filas, aptitud, ref=None):
             sin_venc.append(dict(fila, estado='sin vencimiento registrado'))
         elif date.fromisoformat(str(v)[:10]) < ref:
             vencidas.append(dict(fila, estado='vencida', vencimiento=_fmt(v),
-                                 frase=f'tiene la aptitud {aptitud}, pero venció el {_fmt(v)}'))
+                                 frase=f'tiene la aptitud {_nombre(aptitud)}, vencida el {_fmt(v)}'))
         else:
             vigentes.append(dict(fila, estado='vigente', vencimiento=_fmt(v)))
     return {'aptitud': aptitud, 'fecha_referencia': _fmt(ref),

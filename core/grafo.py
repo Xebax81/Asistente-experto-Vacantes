@@ -70,6 +70,14 @@ class Grafo:
         except (TypeError, ValueError, ConfigurationError):
             self._driver = GraphDatabase.driver(config.NEO4J_URI, **opciones)
         self.traza = traza or Traza()
+        # Se comprueba la conexion al abrir: si Aura esta pausada, el driver reintenta
+        # durante 30 s con «Unable to retrieve routing information» y despues falla con
+        # un traceback largo. Mejor un mensaje claro de entrada.
+        try:
+            self._driver.verify_connectivity()
+        except Exception as e:
+            self._driver.close()
+            raise ErrorGrafo(_mensaje_conexion(e)) from e
 
     def cerrar(self):
         self._driver.close()
@@ -96,6 +104,8 @@ class Grafo:
                     'de Aura y copiá el valor de NEO4J_DATABASE en NEO4J_BASE del .env '
                     '(según el tipo de instancia puede ser "neo4j" o el id de la instancia).'
                 ) from e
+            if 'routing information' in str(e) or 'ServiceUnavailable' in type(e).__name__:
+                raise ErrorGrafo(_mensaje_conexion(e)) from e
             raise ErrorGrafo(f'Error en {etiqueta}: {e}') from e
         ms = int((time.time() - inicio) * 1000)
         filas = [r.data() for r in registros]
@@ -232,6 +242,18 @@ class Grafo:
                 informe.append(f'   XX {nombre}: {str(e)[:160]}')
 
         return ok, informe
+
+
+def _mensaje_conexion(e):
+    texto = str(e)
+    if 'databases.neo4j.io' in config.NEO4J_URI:
+        return ('No se pudo conectar con Neo4j Aura. Lo más probable es que la instancia esté '
+                'PAUSADA (las gratuitas se pausan solas por inactividad): entrá a '
+                'https://console.neo4j.io, buscá la instancia y apretá «Resume»; tarda uno o dos '
+                'minutos en quedar «Running». Si ya está en marcha, revisá la conexión a internet '
+                f'y NEO4J_URI en el .env. Detalle: {texto[:160]}')
+    return (f'No se pudo conectar con Neo4j en {config.NEO4J_URI}: ¿está levantado el '
+            f'contenedor o el servicio? Detalle: {texto[:160]}')
 
 
 def _recortar(parametros, largo=160):

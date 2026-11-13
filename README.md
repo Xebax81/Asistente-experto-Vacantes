@@ -77,6 +77,7 @@ lo que sirve como prueba de regresión.
 ## 3. Instalación
 
 Requiere **Python 3.9+**, **Neo4j** (Docker local o Aura) y una clave de LLM.
+El código está en https://github.com/Xebax81/Asistente-experto-Vacantes
 
 ```bash
 cd pg3_asistente
@@ -130,12 +131,11 @@ tarjeta). Se puede cambiar a Groq, DeepSeek u Ollama local sin tocar código.
 Ollama funciona pero es lento sin GPU: cada consulta hace 2 o 3 llamadas al
 modelo, así que para la interfaz web conviene un proveedor remoto.
 
-### Prompts de los compañeros
+### Prompts
 
-Los prompts de S1 vienen incluidos. Hay que copiar los seis de S2, S3 y S4 desde la
-carpeta de Drive de cada integrante a `prompts/` — ver `prompts/README.md`. No hay
-que retipearlos: así el informe puede afirmar que el sistema integrado usa los
-mismos prompts evaluados en los PI4.
+Los diez prompts están en `prompts/`: el prompt maestro (`s0_maestro.md`) y los de
+extracción y explicación de cada submódulo, tomados de los PI4 de cada integrante y
+ajustados con las devoluciones de la cátedra (ver `prompts/README.md` y `CAMBIOS.md`).
 
 Si falta alguno, el sistema no se cae: ese submódulo entrega su texto
 determinístico de respaldo (regla A6) y el `--check` avisa cuál falta.
@@ -144,26 +144,56 @@ determinístico de respaldo (regla A6) y el `--check` avisa cuál falta.
 
 ## 4. Uso
 
+### Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `python -m api.main --check` | Verifica dependencias, prompts, motor difuso, grafo (las consultas del catálogo) y LLM |
+| `python -m api.main` | Levanta el servidor en http://localhost:8000 (interfaz web + API) |
+| `python -m api.main -q "..."` | Una consulta por consola, con las consultas Cypher ejecutadas |
+| `python -m api.main --casos [IDs] [--pausa 10]` | Pruebas E2E → `pruebas/salida_e2e.md` |
+| `python -m api.main --limpiar [--si]` | Muestra (y con `--si` borra) las vacantes de prueba creadas por el asistente (`origen = 'PG3'`); los datos del PG2 no se tocan |
+| `python -m api.main --depurar [--aplicar]` | Revisión y depuración de la base (punto 1 de la consigna): parámetros difusos en el grafo y entradas de S3 por empleado |
+| `python -m api.main --recalcular pv_001 [--simular]` | Corre S3 + S4 sobre un puesto; con `--simular` compara contra el PG2 sin escribir |
+| `python -m api.main --exportar` | Exporta el grafo a `neo4j/Grupo_5_PG3_export.cypher` y `.json` |
+| `python -m api.main --cargar <archivo.cypher> [--continuar]` | Instala un script Cypher en la base del `.env` |
+| `python -m api.main --catalogos` | Servicios, zonas, turnos, aptitudes, expresiones de urgencia y puestos cargados |
+| `python -m api.main --esquema` · `--conteos` | Etiquetas, relaciones y propiedades del grafo · nodos por etiqueta |
+| `python -m api.main --modelos` | Modelos de Gemini que habilita la clave |
+| `python -m core.motor_difuso` | Verifica el motor difuso contra los valores publicados en los PI3 |
+| `python -m pruebas.prueba_devolucion_S2` | Devolución del PI4 de S2 (18 verificaciones), sin Neo4j ni LLM |
+| `python -m pruebas.prueba_devolucion_S4` | Devolución del PI4 de S4 (15 verificaciones), sin Neo4j ni LLM |
+
+### Cómo reproducir las pruebas
+
 ```bash
-python -m api.main --check                  # verifica grafo, prompts, LLM y motor difuso
-python -m api.main                          # servidor en http://localhost:8000
-python -m api.main -q "¿Quién puede cubrir el turno tarde del Hospital Central?"
-python -m api.main --casos                  # pruebas E2E -> pruebas/salida_e2e.md
-python -m api.main --recalcular pv_001      # corre S3 + S4 sobre un puesto y persiste
-python -m api.main --modelos                # lista los modelos que habilita tu clave
-python -m core.motor_difuso                 # verifica el motor contra los PI3
+python -m api.main --limpiar --si          # 1. grafo como lo dejó el PG2
+python -m api.main --casos --pausa 10      # 2. los 15 casos -> pruebas/salida_e2e.md
+python -m api.main --limpiar --si          # 3. borra las vacantes que crearon las pruebas
 ```
+
+Limpiar antes es necesario: las vacantes que dejan los pedidos de prueba también son de
+Hospital Central / turno tarde y vuelven ambiguas las consultas por servicio. `--pausa 10`
+espera entre casos para no superar el límite del plan gratuito de Gemini. Para comparar en
+las mismas condiciones que el PG2, poner `FECHA_EVALUACION=2026-10-05` en el `.env`
+(los vencimientos se miden contra esa fecha).
 
 ### La interfaz web
 
-A la izquierda, la conversación. A la derecha, el **panel de trazabilidad**, que
-para cada respuesta muestra:
+A la izquierda, la conversación: diez casos de prueba precargados (cinco pedidos que
+recorren la cadena completa y una consulta para cada submódulo, más un intento de
+manipulación), el botón **Empezar de nuevo** (olvida el pedido que quedó esperando un
+dato) y la lista de vacantes registradas en el grafo. Cada pestaña del navegador es una
+sesión propia. A la derecha, el **panel de trazabilidad**, que para cada respuesta muestra:
 
 1. el enrutamiento del prompt maestro, con su nivel de confianza;
 2. qué extrajo el LLM de cada submódulo (el JSON completo);
-3. **cada consulta Cypher ejecutada**, con sus parámetros, filas y milisegundos;
+3. **cada consulta Cypher ejecutada**, con sus parámetros, filas y milisegundos, y la
+   sentencia completa desplegable;
 4. las escrituras en el grafo, si las hubo;
-5. el resultado de la **validación de fidelidad** y las evidencias citadas;
+5. el resultado de la **validación de fidelidad** y las evidencias citadas; si la
+   explicación fue rechazada y se entregó el texto de respaldo (regla A6), los motivos del
+   rechazo y lo que había escrito el modelo;
 6. las etapas recorridas, cuando fue la cadena completa.
 
 Eso es el punto 7 de la consigna —trazabilidad del conocimiento— hecho visible en
@@ -185,6 +215,9 @@ pg3_asistente/
 │  ├─ consultas.py       TODO el Cypher del sistema (lectura y escritura separadas)
 │  ├─ motor_difuso.py    motor Mamdani del PG2, sin cambios
 │  ├─ validador.py       validación de fidelidad unificada
+│  ├─ depuracion.py      revisión y depuración de la base (--depurar)
+│  ├─ exportar.py        exportación del grafo (--exportar)
+│  ├─ carga.py           instalación de scripts .cypher (--cargar)
 │  └─ prompts.py         carga de los prompts de cada autor
 ├─ submodulos/
 │  ├─ s1_requisitos.py   S1 (Arguello)
@@ -197,8 +230,11 @@ pg3_asistente/
 ├─ prompts/              los system prompts (ver prompts/README.md)
 ├─ api/main.py           FastAPI + CLI
 ├─ web/                  interfaz (HTML + CSS + JS, sin build)
-├─ pruebas/casos_e2e.py  5 casos integrados + 4 de error
-└─ neo4j/                script de carga del PG2 y dump
+├─ pruebas/
+│  ├─ casos_e2e.py       15 casos: 6 pedidos (cadena S1→S4), 4 consultas por submódulo, 5 de error
+│  ├─ prueba_devolucion_S2.py, prueba_devolucion_S4.py   sin Neo4j ni LLM
+├─ neo4j/                scripts de carga (PG2 + complemento de S1) y exportación del grafo
+└─ CAMBIOS.md            registro de correcciones del PG3
 ```
 
 ---
@@ -207,17 +243,17 @@ pg3_asistente/
 
 | Punto del PG3 | Dónde está |
 |---|---|
-| 1. Revisión y depuración final | `--check` verifica etiquetas, relaciones y las 20 consultas del catálogo contra el grafo |
+| 1. Revisión y depuración final | `--check` verifica etiquetas, relaciones y las consultas del catálogo contra el grafo; `--depurar` corrige parámetros difusos y entradas de S3; `CAMBIOS.md` documenta las correcciones |
 | 2. Integración del asistente | Base en Neo4j, reglas crisp en los submódulos, componentes difusos en `motor_difuso.py`, LLM como interfaz, interfaz web |
 | 3. Arquitectura final | Sección 2 de este README y el panel de trazabilidad |
-| 4. Casos de uso integrados | `pruebas/casos_e2e.py`: 5 casos que cruzan submódulos |
+| 4. Casos de uso integrados | `pruebas/casos_e2e.py`: 6 pedidos que recorren S1→S4 y 4 consultas por submódulo |
 | 5. Pruebas funcionales | `--casos` genera `pruebas/salida_e2e.md` con esperado vs. obtenido |
 | 6. Evaluación del sistema | Sección 7 |
 | 7. Trazabilidad | Panel de trazabilidad + `trazas/*.json` + nodos `Evidencia` en el grafo |
 | 8. Reflexión metodológica | Para el informe |
 | Prompt maestro | `prompts/s0_maestro.md` |
 | API o interfaz | `api/main.py` + `web/` |
-| Pruebas E2E | E2E-1 a E2E-5 |
+| Pruebas E2E | E2E-1 a E2E-10 y ERR-1 a ERR-5 |
 
 ---
 
@@ -240,10 +276,16 @@ Van al informe, en la sección de evaluación crítica:
   por empleado para que el listado sea útil.
 - **La cercanía es estimada por zona**, no medida: misma zona, zona cercana o lejana.
   Queda marcada como `TRASLADO_ESTIMADO`.
-- **La validación de fidelidad controla datos, no matices.** Verifica cifras, citas,
-  categorías y menciones obligatorias; no detecta un error de interpretación que no
-  use números.
-- **Sin memoria de conversación.** Cada consulta es independiente: "¿y la otra
-  candidata?" no se resuelve con el contexto anterior.
-- **Coincidencia por subcadena**: no tolera errores de tipeo en nombres de servicios
-  ni de personas.
+- **La validación de fidelidad controla por reglas, no semánticamente.** Verifica cifras,
+  citas, categorías, menciones obligatorias, que una vencida no se presente como
+  inexistente, que un deseable no se llame advertencia, que una cifra sea del candidato
+  nombrado y que no haya códigos técnicos; no descompone el texto en afirmaciones para
+  verificar cada una.
+- **Memoria de conversación mínima.** Solo se recuerda el pedido que quedó esperando un
+  dato (por sesión). Una consulta como "¿y la otra candidata?" no se resuelve con el
+  contexto anterior.
+- **Coincidencia por palabras completas**: tolera artículos y mayúsculas, pero no errores
+  de tipeo en nombres de servicios ni de personas.
+- **Parámetros difusos en el código.** El motor usa los parámetros verificados contra los
+  PI3; `--depurar --aplicar` los escribe en el grafo y `--check` controla que coincidan,
+  pero la fuente que usa el cálculo es el código.

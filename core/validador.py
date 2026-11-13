@@ -359,7 +359,10 @@ def _oraciones(t):
 
 def _menciones(seg, aptitud):
     formas = {_sin_tildes(aptitud), _sin_tildes(aptitud.replace('_', ' '))}
-    return [m.start() for f in formas for m in re.finditer(re.escape(f), seg)]
+    pos = {m.start() for f in formas for m in re.finditer(re.escape(f), seg)}
+    # También en prosa: «manejo de residuos patogénicos» por manejo_residuos_patogenicos.
+    pos |= set(_mencion_aptitud(seg, aptitud))
+    return sorted(pos)
 
 
 def validar_s2(texto, ficha):

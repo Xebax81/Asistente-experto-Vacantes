@@ -1,20 +1,25 @@
-Carpeta para los archivos de la base de conocimiento.
+Base de conocimiento del asistente (Grupo 5 – 5K10, PG3)
 
-Copiar acá, desde la carpeta del PG2 en Drive:
+  Grupo_5_PG2_U1_carga.cypher      script de carga del grafo del PG2 (bloques 1 a 9)
+  S1_PI4_complemento.cypher        sinónimos de aptitudes y marcadores de S1-R02 (PI4 de S1)
+  Grupo_5_PG2_U1_consultas.cypher  consultas del PG2, como referencia (copiar desde el Drive del PG2)
+  Grupo_5_PG3_export.cypher        exportación del grafo completo (la genera --exportar)
+  Grupo_5_PG3_export.json          lo mismo en JSON
 
-  Grupo_5_PG2_U1_carga.cypher      script de carga del grafo (bloques 1 a 9)
-  Grupo_5_PG2_U1_consultas.cypher  consultas del PG2, como referencia
+Instalar desde cero (en este orden):
 
-Ya incluido:
+  python -m api.main --cargar neo4j/Grupo_5_PG2_U1_carga.cypher
+  python -m api.main --cargar neo4j/S1_PI4_complemento.cypher
+  python -m api.main --depurar --aplicar
 
-  S1_PI4_complemento.cypher        sinónimos de aptitudes y marcadores de S1-R02 (PI4 de S1).
-                                   Cargarlo después del script del PG2:
-                                   python -m api.main --cargar neo4j/S1_PI4_complemento.cypher
+O bien reconstruir el grafo exportado en una base vacía:
 
-Para el ZIP final del PG3 agregar también el dump de Neo4j:
+  python -m api.main --cargar neo4j/Grupo_5_PG3_export.cypher
 
-  neo4j-admin database dump neo4j --to-path=.
+Para generar la exportación (antes, borrar las vacantes de prueba):
 
-El asistente no necesita estos archivos para correr (se conecta a la instancia
-que indique NEO4J_URI), pero el entregable del PG3 pide la exportación de Neo4j
-y los datos de ejemplo.
+  python -m api.main --limpiar --si
+  python -m api.main --exportar
+
+Todas las consultas que usa el asistente están en core/consultas.py (lectura y escritura
+separadas; las de lectura se verifican sin cláusulas de escritura al arrancar).

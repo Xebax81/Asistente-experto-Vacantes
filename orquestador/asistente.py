@@ -18,7 +18,7 @@ import re
 from datetime import datetime
 
 from core import config, prompts
-from core.grafo import Grafo, Traza
+from core.grafo import ErrorGrafo, Grafo, Traza
 from core.llm import ErrorLLM, pedir_json
 from submodulos import inferencia, s1_requisitos, s2_aptitud, s3_afinidad, s4_explicacion
 
@@ -207,7 +207,13 @@ def responder(texto, grafo=None, traza=None, sesion='web'):
     """Punto de entrada unico del asistente. Devuelve dict con respuesta + traza."""
     propio = grafo is None
     traza = traza or Traza()
-    grafo = grafo or Grafo(traza)
+    if grafo is None:
+        try:
+            grafo = Grafo(traza)
+        except ErrorGrafo as e:
+            # Sin base de conocimiento no se responde nada del dominio: se avisa por qué.
+            return {'submodulo': 'error', 'respuesta': str(e), 'traza': traza.como_dict(),
+                    'pregunta': texto, 'segundos': 0}
     inicio = datetime.now()
     pendiente = pedido_pendiente(sesion)
     texto_efectivo = texto
@@ -241,6 +247,20 @@ def responder(texto, grafo=None, traza=None, sesion='web'):
                              'puesto, explicar la afinidad de un candidato o el listado final.')
             resultado = {'submodulo': 'fuera_de_dominio', 'respuesta': respuesta}
 
+        elif (ruta.get('confianza') == 'baja'
+              and destino in ('S2_aptitud', 'S3_afinidad', 'S4_explicacion')):
+            # El prompt maestro dudó entre submódulos de consulta. En lugar de elegir uno
+            # y contestar otra cosa, se pregunta: es lo que el prompt maestro promete
+            # («con confianza baja el sistema puede pedir una aclaración»). Los pedidos de
+            # cobertura no entran acá: S1 ya pide los datos que falten.
+            resultado = {
+                'submodulo': 'aclaracion', 'aclaracion': True, 'confianza_baja': True,
+                'destino_probable': destino,
+                'respuesta': ('No estoy seguro de qué querés saber. ¿Es sobre quién puede cubrir '
+                              'la vacante y por qué alguien quedó afuera (aptitud y disponibilidad), '
+                              'sobre la afinidad de un candidato o el orden entre candidatos, o sobre '
+                              'la recomendación final y su explicación? Si podés, nombrá también '
+                              'el servicio o el puesto.')}
         elif destino in PEDIDO:
             # Todo pedido de cobertura recorre la cadena y termina en candidatos.
             # Si S1 lo deja en espera, la cadena se corta sola y devuelve las preguntas.

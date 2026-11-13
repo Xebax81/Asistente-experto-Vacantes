@@ -360,7 +360,10 @@ def _pregunta(campo, ficha, catalogo=None):
         for v in ficha['vacantes']:
             sug = v['servicio'].get('sugerencias') or []
             if sug:
-                return f"No reconocemos ese servicio. ¿Es alguno de estos: {', '.join(sug)}?"
+                escrito = v['servicio'].get('texto')
+                cual = f'«{escrito}»' if escrito else 'ese servicio'
+                return (f"No reconocemos {cual}: no está en el catálogo de servicios. "
+                        f"¿Es alguno de estos: {', '.join(sug)}?")
         return _con_opciones(PREGUNTAS['servicio'], catalogo.get('servicios_lista'))
     if campo == 'turno':
         return _con_opciones(PREGUNTAS['turno'], catalogo.get('turnos_lista'))

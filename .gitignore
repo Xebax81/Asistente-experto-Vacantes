@@ -12,3 +12,4 @@ proyecto_anterior/
 # datos locales
 trazas/*
 !trazas/.gitkeep
+pruebas/diagnostico_neo4j.log

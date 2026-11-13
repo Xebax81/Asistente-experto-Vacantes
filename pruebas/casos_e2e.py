@@ -182,7 +182,10 @@ def v_fidelidad_s4():
 
 
 # Devolución del PI4 de S2 extendida a S4: nada de códigos del grafo en la respuesta.
-PATRON_TECNICO = r'\b\w+_\w+\b(?<!pv_\d{3})|SIN_DATO|DESCONOCIDO|\[\s*\d+[.,]\d+\s*,|\bcon dato\b'
+# «con dato» solo como estado interno; «afinidad baja con dato razonablemente preciso» es el
+# enunciado de la regla FZ5 del glosario (el validador ya la acepta).
+PATRON_TECNICO = (r'\b\w+_\w+\b(?<!pv_\d{3})|SIN_DATO|DESCONOCIDO|\[\s*\d+[.,]\d+\s*,|'
+                  r'\bcon dato\b(?!\s+(?:razonablemente|preciso|impreciso))')
 
 
 def v_sin_tecnicos():
@@ -485,6 +488,21 @@ CASOS = [
         ],
     },
     {
+        'id': 'ERR-5', 'titulo': 'Consulta ambigua: el prompt maestro duda y el sistema pregunta',
+        'pasos': ['¿Y Diego?'],
+        # Sin servicio, sin puesto y sin decir qué se quiere saber de Diego: puede ser S2, S3
+        # o S4. Lo correcto es pedir aclaración (confianza baja) o, si el maestro lo manda a un
+        # submódulo, que ese submódulo pregunte por la vacante. En ningún caso se inventa una
+        # respuesta ni se escribe en el grafo.
+        'verifica': [
+            v_sin_error(), v_sin_escrituras(),
+            V('Pide aclaración en lugar de responder', 'LLM', 'aclaración (confianza baja o vacante ambigua)',
+              lambda rs: (bool(ult(rs).get('aclaracion'))
+                          or bool(re.search(r'\?\s*$|a cu[aá]l|qu[eé] quer[eé]s|nombr[aá]', ult(rs).get('respuesta') or '', re.I)),
+                          f"{ult(rs).get('submodulo')} · {(ult(rs).get('respuesta') or '')[:90]}")),
+        ],
+    },
+    {
         'id': 'ERR-4', 'titulo': 'Servicio que no existe en el catálogo',
         'pasos': ['Necesito cubrir el turno tarde en el Supermercado Sur, para mañana.'],
         'verifica': [
@@ -531,7 +549,7 @@ def _celda(x):
 # Las consultas sobre lo ya registrado (S2, S3, S4 y los errores) corren antes que los
 # pedidos que crean puestos: si no, «el Hospital Central, turno tarde» deja de ser un
 # único puesto y el sistema pregunta, con razón, a cuál se refiere el usuario.
-ORDEN = ['E2E-7', 'E2E-8', 'E2E-9', 'E2E-10', 'ERR-1', 'ERR-2', 'ERR-3',
+ORDEN = ['E2E-7', 'E2E-8', 'E2E-9', 'E2E-10', 'ERR-1', 'ERR-2', 'ERR-3', 'ERR-5',
          'E2E-1', 'E2E-2', 'E2E-3', 'E2E-4', 'E2E-5', 'E2E-6', 'ERR-4']
 
 

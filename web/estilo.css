@@ -280,3 +280,11 @@ pre.cypher,.cypher{color:var(--cita)}
 .motivos{margin:.3rem 0 0 1.1rem;padding:0;font-size:.82em;line-height:1.35}
 .motivos li{margin:.15rem 0}
 .rechazado summary{cursor:pointer;font-size:.8em;opacity:.8}
+
+/* paso 1 del plan (13/11): botón reiniciar, lista de vacantes y Cypher desplegable */
+.ejemplos-barra{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.puestos{font-size:10.5px;letter-spacing:.06em;color:var(--tenue2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.puestos span{color:var(--tenue)}
+.sentencia summary{cursor:pointer;font-size:.8em;color:var(--tenue);margin-top:2px}
+.sentencia summary:hover{color:var(--acento)}
+.sentencia pre{white-space:pre-wrap}

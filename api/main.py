@@ -17,6 +17,7 @@ para el usuario"). Sirve tambien la interfaz web estatica de web/.
   python -m api.main --catalogos  muestra servicios, zonas, turnos y aptitudes cargados
   python -m api.main --depurar          revisión del punto 1 (muestra, no escribe)
   python -m api.main --depurar --aplicar  aplica las correcciones
+  python -m api.main --exportar  exporta el grafo a neo4j/Grupo_5_PG3_export.cypher y .json
 """
 import json
 import sys
@@ -397,6 +398,24 @@ def cargar_script(ruta, continuar=False):
         print(f'No se pudo conectar: {e}')
 
 
+def exportar_grafo():
+    """Ítem i del ZIP: exportación de la base de conocimiento."""
+    from core.exportar import exportar
+    with Grafo() as g:
+        previas = g.leer('PG3-datos-de-prueba')
+        if previas:
+            print(f'AVISO: hay {len(previas)} vacante(s) de prueba creadas por el asistente '
+                  '(origen = PG3). Si querés exportar el grafo limpio, corré antes:')
+            print('    python -m api.main --limpiar --si\n')
+        r = exportar(g)
+    print(f"Exportados {r['nodos']} nodos y {r['relaciones']} relaciones.")
+    for etiqueta, n in sorted(r['por_etiqueta'].items()):
+        print(f'  {etiqueta:32} {n:>6}')
+    print(f"\n  {r['cypher']}\n  {r['json']}")
+    print('\nPara reconstruir el grafo en una base vacía:')
+    print('    python -m api.main --cargar neo4j/Grupo_5_PG3_export.cypher')
+
+
 def listar_modelos():
     """Muestra los modelos que habilita la clave configurada."""
     from core.llm import ErrorLLM, _elegir_modelo_gemini, listar_modelos_gemini
@@ -430,6 +449,9 @@ def main():
         return
     if '--depurar' in args:
         depurar(aplicar='--aplicar' in args)
+        return
+    if '--exportar' in args:
+        exportar_grafo()
         return
     if '--catalogos' in args:
         ver_catalogos()
@@ -497,4 +519,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except ErrorGrafo as e:
+        # Sin traceback: el mensaje ya dice qué hacer (p. ej. reanudar Aura).
+        print(f'\nXX {e}')
+        sys.exit(2)

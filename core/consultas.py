@@ -508,6 +508,19 @@ RETURN e.id AS legajo, e.nombre AS nombre,
 ORDER BY legajo
 """,
 
+    # Exportacion del grafo completo (python -m api.main --exportar). Solo lectura.
+    'PG3-export-nodos': """
+MATCH (n)
+RETURN elementId(n) AS id, labels(n) AS etiquetas, properties(n) AS props
+ORDER BY etiquetas[0], id
+""",
+
+    'PG3-export-relaciones': """
+MATCH (a)-[r]->(b)
+RETURN elementId(a) AS desde, elementId(b) AS hasta, type(r) AS tipo, properties(r) AS props
+ORDER BY tipo
+""",
+
     'PG3-parametros-difusos': """
 MATCH (v:Variable_Linguistica)
 OPTIONAL MATCH (v)-[:TIENE_TERMINO]->(t)

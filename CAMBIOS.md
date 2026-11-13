@@ -4,6 +4,8 @@ Bitácora para quien siga trabajando sobre `pg3_asistente` (persona o modelo). E
 completo con el análisis está en el Proyecto de Claude: `claude/PG3_plan_correcciones.md`;
 el estado general del prototipo, en `claude/PG3_estado_del_prototipo.md`. Entrega: 15/11/2026.
 
+**Revisión contra la consigna (13/11)** con lo que falta y el mapa del informe: Proyecto de Claude, `claude/PG3_revision_consigna.md`.
+
 **Respaldo:** `proyecto_anterior/` es la copia exacta del código antes de estos cambios
 (todo menos `.venv`). No entra al ZIP.
 
@@ -26,11 +28,12 @@ después `--casos <IDs> --pausa 10` (genera `pruebas/salida_e2e.md`).
 | 2 | Arreglar la caída de S4 al respaldo en la cadena completa (E2E-1, E2E-2) | HECHO en código (tres rondas); verificación contra Aura en curso |
 | 3 | Sin valores técnicos en las respuestas de S4 (SOLAPE_PARCIAL, Baja_prioridad, [x, y]…) | HECHO 12/11 |
 | 4 | Correr `--depurar --aplicar` en Aura (entradas de S3 por empleado; parámetros difusos en el grafo) y `--recalcular pv_001 --simular` | PENDIENTE (lo corre Sebastián) |
-| 5 | Web: ejemplos de S2/S3/S4/simulación/manipulación, id de sesión, botón «Empezar de nuevo», Cypher en el panel, lista de puestos (`/api/puestos`), aviso de duración de la cadena | PENDIENTE (el panel ya muestra motivos de rechazo: parte del paso 1) |
-| 6 | Confianza baja del prompt maestro: preguntar en vez de ejecutar (o quitar la promesa del prompt) + caso ERR-5 | PENDIENTE |
-| 7 | Redacción menor: E2E-7 «pero…, pero», ERR-4 «el Supermercado Sur», cifras con tres decimales | PENDIENTE (tres decimales ya en el prompt de S4) |
-| 8 | README y `neo4j/LEEME.txt` desactualizados (14 casos, memoria mínima, comandos completos, sin dump) | PENDIENTE |
+| 5 | Web: ejemplos de S2/S3/S4/simulación/manipulación, id de sesión, botón «Empezar de nuevo», Cypher en el panel, lista de puestos (`/api/puestos`), aviso de duración de la cadena | HECHO 13/11 |
+| 6 | Confianza baja del prompt maestro: preguntar en vez de ejecutar + caso ERR-5 | HECHO 13/11 (falta correr ERR-5 contra Aura) |
+| 7 | Redacción menor: E2E-7 «pero…, pero», ERR-4 «el Supermercado Sur», cifras con tres decimales | HECHO 13/11 |
+| 8 | README y `neo4j/LEEME.txt` desactualizados (casos, memoria mínima, comandos completos, sin dump) | HECHO 13/11 |
 | 9 | Corrida final completa limpia → `salida_e2e.md` para el informe | PENDIENTE |
+| 9b | Comando `--exportar` (exportación de Neo4j para el ZIP) | HECHO 13/11 en código; lo corre Sebastián |
 | 10 | `armar_zip.py` y entregable (excluir respaldos, `.venv`, `.env`, trazas; agregar consultas.cypher, export de Aura, diagrama, informe PDF, video/infografía) | PENDIENTE |
 
 Decisiones del grupo, no de código: representación S3 → S4, parámetros difusos en código vs.
@@ -114,3 +117,85 @@ grafo, validación con RR. HH. Si no se resuelven, se declaran como límites con
     CP1 del PI4 sigue rechazado (prueba_devolucion_S4 15/15).
   - `legible()` acepta el sufijo del PG2 «manejo_residuos_patogenicos (vencida)».
   - Re-validados offline los dos textos rechazados: ahora pasan.
+
+### 13/11 — Paso 1 de la revisión contra la consigna (pasos 5 a 8 del plan + exportación)
+
+**`web/index.html`, `web/app.js`, `web/estilo.css`**
+- 10 casos de prueba precargados: los 5 pedidos de antes + S2 (descarte de Bruno Gómez),
+  S3 (datos faltantes de Valeria Núñez), S3 (simulación de Diego Ruiz), S4 (posición de
+  Diego Ruiz) y el intento de manipulación. Son los textos de E2E-7 a E2E-10 y ERR-2.
+- Sesión propia por pestaña (`sessionStorage` + `crypto.randomUUID`) enviada en cada
+  consulta: el pedido en espera ya no se comparte entre navegadores.
+- Botón «Empezar de nuevo» → `/api/reiniciar` (existía el endpoint, faltaba el botón).
+- Lista de vacantes registradas (`/api/puestos`), que se actualiza cuando un pedido crea una.
+- Panel: cada consulta y cada plantilla de escritura muestra la sentencia Cypher desplegable.
+- Aviso a los 8 s de espera: la cadena completa puede tardar hasta dos minutos.
+- Etiqueta en el pie cuando el enrutamiento fue dudoso y no se ejecutó.
+
+**`orquestador/asistente.py` + `prompts/s0_maestro.md` + `pruebas/casos_e2e.py`**
+- Si el prompt maestro devuelve `confianza: baja` y el destino es S2, S3 o S4, no se ejecuta:
+  se responde una pregunta de aclaración (`submodulo: 'aclaracion'`, `confianza_baja: True`).
+  Los pedidos de cobertura no cambian (S1 pide lo que falte).
+- Regla 6 del prompt maestro: «baja» cuando se nombra a una persona o vacante sin decir qué se
+  quiere saber; ese mensaje es del dominio, no `fuera_de_dominio`. Ejemplo nuevo («¿Qué pasa
+  con Ana Pérez?»).
+- Caso ERR-5 («¿Y Diego?»): sin error, sin escrituras y con pedido de aclaración. Va antes de
+  los pedidos en `ORDEN`. Total: 15 casos.
+
+**Redacción**
+- `submodulos/s2_aptitud.py`: frases fijas sin «pero» al comienzo («tiene registrada la aptitud
+  limpieza hospitalaria con la certificación vencida el 28/09/2026, antes de la fecha de
+  evaluación 05/10/2026») y con el nombre legible de la aptitud (`_nombre()` usa `legible()` de S4).
+  Antes salía «…, pero tiene la aptitud limpieza_hospitalaria, pero su certificación venció…».
+- `core/validador._menciones()` reconoce también la aptitud escrita en prosa
+  («manejo de residuos patogénicos»), para que los controles de S2 sigan funcionando.
+- `submodulos/s1_requisitos.py` y `prompts/s1_explicacion.txt`: un servicio no reconocido se
+  nombra como texto escrito que no está en el catálogo, no como «el servicio X» (ERR-4).
+- `pruebas/prueba_devolucion_S2.py`: ajustada a la frase nueva (18/18).
+
+**Exportación de Neo4j** (`core/exportar.py`, `core/consultas.py`, `api/main.py`)
+- `python -m api.main --exportar`: dos consultas de solo lectura nuevas del catálogo
+  (`PG3-export-nodos`, `PG3-export-relaciones`) y escritura de
+  `neo4j/Grupo_5_PG3_export.cypher` (reconstruye el grafo en una base vacía con `--cargar`) y
+  `neo4j/Grupo_5_PG3_export.json`. Fechas como `date('…')`; avisa si hay vacantes de prueba.
+
+**Documentación**
+- `README.md`: tabla completa de comandos, «Cómo reproducir las pruebas», interfaz web nueva,
+  estructura con los módulos nuevos, 15 casos, límites corregidos (memoria mínima, palabras
+  completas, parámetros difusos en el código, validación por reglas), enlace a GitHub.
+- `neo4j/LEEME.txt` reescrito (instalación desde cero o desde la exportación).
+
+**Verificado sin Aura:** compila todo; `prueba_devolucion_S2` 18/18; `prueba_devolucion_S4`
+15/15; `core.motor_difuso` coincide con los PI3; `app.js` sin errores de sintaxis; orquestador
+con enrutamiento simulado de confianza baja devuelve la aclaración sin consultar el grafo.
+
+### 13/11 — Conexión con Aura pausada
+- `core/grafo.py`: `Grafo()` verifica la conexión al abrir (`verify_connectivity`). Si Aura está
+  pausada («Unable to retrieve routing information») da un mensaje claro (reanudar la instancia
+  en console.neo4j.io) en vez de reintentar 30 s y cortar con traceback.
+- `api/main.py`: los comandos de consola muestran ese mensaje sin traceback.
+- `orquestador/asistente.py`: la web recibe el mismo mensaje como respuesta en lugar de un error 500.
+- Causa real del 13/11: `pruebas/diagnostico_neo4j.py` (nuevo) mostró `SSLCertVerificationError`
+  con `neo4j+s` y `bolt+s`, y conexión OK con `neo4j+ssc`. En esa PC/red algo presenta un
+  certificado que Python no valida (antivirus que inspecciona TLS, red con inspección o almacén
+  de certificados). Se cambió el `.env` a `neo4j+ssc://` (cifrado sin verificar el certificado) y
+  se documentó en `.env.ejemplo`. Límite a declarar: en un despliegue real se usaría `neo4j+s`.
+
+### 13/11 — Corrida completa contra Aura (15:43) y depuración aplicada
+- `--depurar --aplicar` (salida guardada por Sebastián en `salidaDepurar.txt`): se escribieron en
+  el grafo las 30 funciones de pertenencia del motor (faltaban margen_vigencia/critico y holgado,
+  solape_horario/insuficiente y total), se borraron las variables duplicadas `afinidad_S4` y
+  `desempeno` (mismo concepto que `afinidad` y `desempeno_reciente`) y ahora grafo y motor
+  coinciden en las 30. Las entradas de S3 ya estaban en el Empleado (E102 y E103 sin datos
+  observados). Las trapezoidales de S3 (cercanía, experiencia) no se escriben: límite conocido.
+- `--recalcular pv_001 --simular`: los tres candidatos del PG2 coinciden (0,453 / 0,442 / 0,431).
+- `--casos --pausa 10`: 14/15. E2E-1 y E2E-2 con la explicación de S4 redactada por el LLM y
+  validada (antes caían al respaldo). Única falla: E2E-2, «Sin códigos técnicos», por
+  «afinidad baja con dato razonablemente preciso» (enunciado de la regla FZ5): falso positivo de
+  la verificación de la prueba, no del sistema (el validador ya la aceptaba). Corregido en
+  `PATRON_TECNICO`.
+- Diferencias con el PG2 en puestos nuevos (contraste, no falla): la afinidad sale como intervalo
+  porque la cercanía se estima por zona (TRASLADO_ESTIMADO) en lugar del traslado medido del PG2;
+  E401 Valeria Núñez Baja prioridad (0,290) vs. Recomendado con reservas (0,397) por la
+  representación S3→S4 (punto medio y confiabilidad).
+- `--exportar`: 406 nodos y 1052 relaciones en `neo4j/Grupo_5_PG3_export.cypher` y `.json`.
