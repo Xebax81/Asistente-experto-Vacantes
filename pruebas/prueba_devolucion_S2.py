@@ -175,9 +175,10 @@ def main():
             print('        -', m)
 
     print('\n== 3. Validador: tiene que ACEPTAR')
-    for nombre, texto, f, exig in [('C2 bien redactado', BIEN_C2, llm_uno, {}),
+    # PG3 (13/11): las mismas exigencias que pasa s2_aptitud.explicar (codigos_permitidos).
+    for nombre, texto, f, exig in [('C2 bien redactado', BIEN_C2, llm_uno, {'codigos_permitidos': True}),
                                    ('C1 bien redactado', BIEN_C1, llm_full,
-                                    {'legajos': ['E101', 'E104', 'E105']})]:
+                                    {'legajos': ['E101', 'E104', 'E105'], 'codigos_permitidos': True})]:
         motivos = validar_s2(texto, f) + validar_explicacion({'texto': texto}, f, exig)
         chequeo(nombre, not motivos, motivos)
 

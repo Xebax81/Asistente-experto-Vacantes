@@ -268,7 +268,10 @@ pre.cypher,.cypher{color:var(--cita)}
    Va al final para que no la pisen las reglas de .panel y .marca. */
 @media (max-width:980px){
   main{grid-template-columns:1fr}
-  .panel{display:none}
+  /* PG3 (pruebas 13/11, B12): antes .panel{display:none} y la trazabilidad (punto 7 de la
+     consigna) desaparecía en un proyector de 1024 px. Ahora queda debajo del chat. */
+  main{grid-template-rows:minmax(0,1fr) minmax(0,38vh)}
+  .panel{border-left:none;border-top:1px solid var(--borde-f);overflow:auto}
   .marca span{display:none}
   .mensajes{padding:18px 16px}
   .ejemplos-barra{padding:0 16px 10px}

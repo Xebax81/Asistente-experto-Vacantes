@@ -53,8 +53,13 @@ else:
     app = _SinFastAPI()
 
 
+# PG3 (pruebas 13/11, B11): con miles de palabras el prompt maestro devolvía cualquier
+# cosa y la respuesta era «fuera de dominio». Un pedido real entra holgado en 2000.
+MAX_CARACTERES = 2000
+
+
 class Consulta(BaseModel):
-    texto: str
+    texto: str = ''          # PG3 (B19): /api/reiniciar no lo usa y no tiene por qué exigirlo
     sesion: str = 'web'
 
 
@@ -62,13 +67,18 @@ class Consulta(BaseModel):
 def api_consulta(c: Consulta):
     if not (c.texto or '').strip():
         return JSONResponse({'respuesta': 'Escribí una consulta.'}, status_code=400)
+    if len(c.texto) > MAX_CARACTERES:
+        return JSONResponse({'submodulo': 'error',
+                             'respuesta': f'La consulta es demasiado larga ({len(c.texto)} caracteres; '
+                                          f'el máximo es {MAX_CARACTERES}). Escribila en pocas oraciones.'},
+                            status_code=400)
     return asistente.responder(c.texto.strip(), sesion=c.sesion or 'web')
 
 
 @app.post('/api/reiniciar')
 def api_reiniciar(c: Consulta):
-    """Olvida el pedido en espera (el botón de empezar de nuevo en la interfaz)."""
-    asistente.olvidar_pendiente(c.sesion or 'web')
+    """Olvida el pedido y la consulta en espera (el botón de empezar de nuevo)."""
+    asistente.reiniciar_sesion(c.sesion or 'web')
     return {'ok': True}
 
 
@@ -84,8 +94,15 @@ def api_puestos():
 @app.post('/api/recalcular/{puesto}')
 def api_recalcular(puesto: str):
     """Corre S3 + S4 sobre un puesto y persiste el resultado."""
-    with Grafo() as g:
-        return inferencia.recalcular_puesto(g, puesto, persistir=config.ESCRITURA_HABILITADA)
+    # PG3 (B19): 404 si el puesto no tiene evaluaciones y 503 sin Neo4j (antes 200 y 500).
+    try:
+        with Grafo() as g:
+            r = inferencia.recalcular_puesto(g, puesto, persistir=config.ESCRITURA_HABILITADA)
+    except ErrorGrafo as e:
+        return JSONResponse({'error': str(e)}, status_code=503)
+    if r.get('error') and 'no tiene evaluaciones' in r['error']:
+        return JSONResponse(r, status_code=404)
+    return r
 
 
 @app.get('/api/estado')

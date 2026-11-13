@@ -334,7 +334,10 @@ def explicar(grafo, ficha, intencion):
     except PromptFaltante:
         return respaldo(ficha), None, False
     ficha_llm = ficha_para_explicar(ficha)
-    exigencias = {'sin_juicio_personas': False}
+    # PG3 (pruebas 13/11): S2 tiene su propio control de valores técnicos (validar_s2) y las
+    # salidas aceptadas del PI4 nombran las aptitudes por su código; no se le aplica el
+    # control de códigos con guion bajo que se agregó para S1 y S3.
+    exigencias = {'sin_juicio_personas': False, 'codigos_permitidos': True}
     if intencion == 'candidatos_puesto' and (ficha.get('consulta') or {}).get('filtro_estado') != 'descartados':
         exigencias['legajos'] = [r['legajo'] for r in ficha.get('evaluacion', {}).get('validos', [])]
     # Ya no se exige mencionar SIN_DATO de los descartados: a un descartado no se le evalúan

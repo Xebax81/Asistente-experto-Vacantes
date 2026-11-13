@@ -8,7 +8,8 @@ Novedad del PG3: `registrar()` escribe el Pedido_Cobertura y el Puesto_Vacante e
 el grafo (lo que en el PI4 era la opcion --registrar), porque es el punto de
 entrada de la cadena S1 -> S2 -> S3 -> S4.
 """
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timedelta
 
 from core import config, prompts
 from core.prompts import PromptFaltante
@@ -76,7 +77,67 @@ PREGUNTAS = {
     'servicio': '¿Para qué servicio o sede es la cobertura?',
     'turno': '¿En qué turno?',
     'zona': '¿En qué zona o departamento es?',
+    # PG3 (pruebas 13/11, B01): sin urgencia S3 no puede calcular la afinidad.
+    'plazo': ('¿Para cuándo se necesita cubrir la vacante? Por ejemplo: hoy, para mañana, '
+              'dentro de tres días o la semana que viene.'),
 }
+
+# PG3 (pruebas 13/11, B08): plazos que el diccionario del grafo no tiene. Se calculan en
+# código, de forma determinística, y quedan marcados con su fuente para la trazabilidad.
+DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+CANTIDADES = {'un': 1, 'una': 1, 'uno': 1, 'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5,
+              'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10, 'quince': 15}
+
+
+def _fecha_ref():
+    if config.FECHA_EVALUACION:
+        return date.fromisoformat(config.FECHA_EVALUACION)
+    return date.today()
+
+
+def _expresion_calendario(texto, hoy=None):
+    """Interpreta un plazo que no está en el diccionario de urgencia del grafo.
+
+    Devuelve una entrada con la misma forma que las del diccionario (tipo, valor,
+    unidad) o None. Cubre: «para ayer» (premura máxima, como «de inmediato»), días de
+    la semana («para el lunes»), «dentro de / en N días|horas|semanas» y fechas dd/mm.
+    """
+    t = _norm_signos(texto or '')
+    if not t:
+        return None
+    hoy = hoy or _fecha_ref()
+    base = {'fuente': 'calendario_PG3', 'estado_validacion': 'provisional'}
+
+    if re.search(r'\b(para )?ayer\b', t):
+        return {**base, 'texto': 'para ayer', 'tipo': 'premura', 'valor': 10, 'unidad': 'puntos'}
+
+    m = re.search(r'\b(?:dentro de|en|en los proximos|en las proximas)\s+(\d+|' +
+                  '|'.join(CANTIDADES) + r')\s+(hora|horas|dia|dias|semana|semanas)\b', t)
+    if m:
+        n = int(m.group(1)) if m.group(1).isdigit() else CANTIDADES[m.group(1)]
+        unidad = m.group(2)
+        horas = n * (1 if unidad.startswith('hora') else 24 if unidad.startswith('dia') else 168)
+        return {**base, 'texto': m.group(0), 'tipo': 'plazo', 'valor': horas, 'unidad': 'h'}
+
+    m = re.search(r'\b(' + '|'.join(DIAS_SEMANA) + r')\b', t)
+    if m:
+        dias = (DIAS_SEMANA.index(m.group(1)) - hoy.weekday()) % 7 or 7
+        return {**base, 'texto': m.group(0), 'tipo': 'plazo', 'valor': dias * 24, 'unidad': 'h'}
+
+    m = re.search(r'\b(\d{1,2})\s+(\d{1,2})(?:\s+(\d{2,4}))?\b', t) if '/' in (texto or '') else None
+    if m:
+        try:
+            anio = int(m.group(3)) if m.group(3) else hoy.year
+            anio = anio + 2000 if anio < 100 else anio
+            f = date(anio, int(m.group(2)), int(m.group(1)))
+            if not m.group(3) and f < hoy - timedelta(days=1):
+                f = date(anio + 1, f.month, f.day)
+            horas = max((f - hoy).days, 0) * 24 or 8      # vencida o para hoy: como «hoy»
+            return {**base, 'texto': m.group(0).replace(' ', '/'), 'tipo': 'plazo',
+                    'valor': horas, 'unidad': 'h'}
+        except ValueError:
+            return None
+    return None
 
 
 def _con_opciones(pregunta, opciones, maximo=8):
@@ -223,6 +284,10 @@ def construir_ficha(grafo, texto, extraido, catalogo=None):
 
         ficha['vacantes'].append({
             'servicio': {'texto': v.get('servicio_texto'), 'nombre': nombre_serv,
+                         # PG3 (B05): «no indicado» y «no reconocido» son estados distintos.
+                         'frase': (None if nombre_serv else
+                                   'no está en el catálogo de servicios' if v.get('servicio_texto')
+                                   else 'no se indicó en el pedido'),
                          'resolucion': serv.get('resolucion'), 'tipo': (serv.get('servicio') or {}).get('tipo'),
                          'sugerencias': serv.get('sugerencias') or [], 'regla': 'S1-R06'},
             'turno': {'texto': v.get('turno_texto'), 'nombre': nombre_turno,
@@ -283,6 +348,22 @@ def construir_ficha(grafo, texto, extraido, catalogo=None):
             else:
                 premura = float(e['valor']) if premura is None else max(premura, float(e['valor']))
 
+    if plazo_h is None and premura is None:
+        # PG3 (B08): primero las expresiones que el LLM extrajo y el grafo no reconoció;
+        # si no hay, el texto completo del pedido (el fragmento queda anclado al texto).
+        for fuente in list(no_reconocidas) + [texto]:
+            e = _expresion_calendario(fuente)
+            if e:
+                reconocidas.append(e)
+                if e['texto'] in no_reconocidas:
+                    no_reconocidas.remove(e['texto'])
+                no_reconocidas = [x for x in no_reconocidas if x != fuente]
+                if e['tipo'] == 'plazo':
+                    plazo_h = float(e['valor'])
+                else:
+                    premura = float(e['valor'])
+                break
+
     u = s1_urgencia(plazo_h, premura)
     if u:
         # Devolución de la cátedra al PI4: hay TRES números distintos y el texto los
@@ -320,11 +401,15 @@ def construir_ficha(grafo, texto, extraido, catalogo=None):
                                        'meses': meses, 'texto': exp.get('texto'), 'regla': 'S1-R10'}
 
     # ---------------------------------------------------- R01: estado del pedido
+    # PG3 (B01): S3 necesita la urgencia para calcular la afinidad. Si ni el grafo ni el
+    # calendario reconocieron un plazo, el pedido queda en espera y se pregunta.
+    if not faltantes and ficha['urgencia'].get('categoria') is None:
+        faltantes.add('plazo')
     if faltantes:
         ficha['pedido'] = {
             'estado': 'en_espera', 'campos_faltantes': sorted(faltantes), 'regla': 'S1-R01',
-            'preguntas_aclaracion': [_pregunta(c, ficha, catalogo or {})
-                                     for c in sorted(faltantes)],
+            'preguntas_aclaracion': [q for q in (_pregunta(c, ficha, catalogo or {})
+                                                 for c in sorted(faltantes)) if q],
         }
     else:
         ficha['pedido'] = {'estado': 'completo', 'campos_faltantes': [],
@@ -355,6 +440,11 @@ def _pregunta(campo, ficha, catalogo=None):
                     return f"No reconocemos {cual}. ¿Quisiste decir {', '.join(sug)}?"
                 return _con_opciones(f'No reconocemos {cual}: ¿en qué zona o '
                                      'departamento es?', catalogo.get('zonas_lista'))
+        # PG3 (B05): si la zona no se informó y falta el servicio, se va a heredar del
+        # servicio (S1-R07). Preguntarla contradecía «se determinará cuando se indique el
+        # servicio». Sigue figurando en campos_faltantes, como en el PG2.
+        if all(v['zona'].get('resolucion') == 'sin_dato' for v in ficha['vacantes']):
+            return None
         return _con_opciones(PREGUNTAS['zona'], catalogo.get('zonas_lista'))
     if campo == 'servicio':
         for v in ficha['vacantes']:
@@ -445,7 +535,10 @@ def registrar(grafo, ficha):
     if ficha['pedido']['estado'] != 'completo':
         return []
     ahora = datetime.now().astimezone()
-    pedido_id = 'ped_' + ahora.strftime('%Y%m%d%H%M%S')
+    # PG3 (pruebas 13/11, B13): con resolución de segundos, dos pedidos registrados en el
+    # mismo segundo daban el mismo id y el MERGE de W-S1-puesto mezclaba los dos puestos.
+    # Se agregan los milisegundos (el formato sigue siendo pv_<fecha y hora>_<n>).
+    pedido_id = 'ped_' + ahora.strftime('%Y%m%d%H%M%S') + f'{ahora.microsecond // 1000:03d}'
     grafo.escribir('W-S1-pedido', pedido_id=pedido_id, texto=ficha['texto_original'],
                    estado=ficha['pedido']['estado'], fecha=ahora.isoformat(),
                    campos_faltantes=ficha['pedido']['campos_faltantes'])

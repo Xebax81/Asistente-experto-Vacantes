@@ -134,8 +134,16 @@ def validar_explicacion(datos, ficha, exigencias=None, grafo=None, evaluaciones=
     if exigencias.get('hipotetico'):
         if 'simulacion' not in plano and 'hipotet' not in plano:
             motivos.append('Es una simulación hipotética y el texto no lo aclara.')
-        if 'categoria no cambia' not in plano and 'no cambia la categoria' not in plano:
+        # PG3 (pruebas 13/11, B10): se sigue exigiendo la aclaración, pero también vale la
+        # forma explícita «la categoría registrada no cambia».
+        if not any(f in plano for f in ('categoria no cambia', 'no cambia la categoria',
+                                        'categoria registrada no cambia',
+                                        'no se recalcula la categoria')):
             motivos.append('En una simulación hay que aclarar que la categoría no cambia.')
+        if re.search(r'categoria[^.]{0,40}\b(se mantiene|se mantendria|manteniendose)\b', plano):
+            motivos.append('La simulación no recalcula la categoría: decí que la categoría registrada '
+                           'no cambia porque la simulación no se guarda, no que «se mantiene» en el '
+                           'escenario simulado.')
     if exigencias.get('descartado') and 'descartad' not in plano:
         motivos.append('El candidato está descartado y el texto no lo dice.')
 
@@ -150,6 +158,9 @@ def validar_explicacion(datos, ficha, exigencias=None, grafo=None, evaluaciones=
     if 'citas:' in plano or 'ev_' in plano:
         motivos.append('El texto incluye la sección de citas o identificadores de evidencia; '
                        'eso va en el campo de citas, no en la explicación.')
+
+    # PG3 (pruebas 13/11, B04 y B09): rutas de campos y códigos internos en el texto.
+    motivos.extend(_formato_tecnico(texto, codigos=not exigencias.get('codigos_permitidos')))
 
     # ---------------------------------------------------- 4. frases prohibidas
     for frase in FRASES_PROHIBIDAS:
@@ -469,7 +480,34 @@ def validar_s2(texto, ficha):
 DECIMAL = re.compile(r'(?<![\d/])\d+[.,]\d+(?![\d/])')
 # Códigos del grafo escritos tal cual: palabras unidas por guion bajo (SOLAPE_PARCIAL,
 # Baja_prioridad, manejo_residuos_patogenicos) o siglas de estado en mayúsculas.
-TECNICO = re.compile(r'\b[A-Za-zÁ-úñÑ]+(?:_[A-Za-zÁ-úñÑ0-9]+)+\b|\b(?:SIN_DATO|DESCONOCIDO|OBSERVADO|ESTIMADO)\b')
+TECNICO = re.compile(r'\b[A-Za-zÁ-úñÑ]+(?:_[A-Za-zÁ-úñÑ0-9]+)+\b|'
+                     r'\b(?:SIN_DATO|DESCONOCIDO|OBSERVADO|ESTIMADO|PROVISIONAL)\b')
+# PG3 (B04): rutas de campos de la ficha copiadas del prompt («pedido.campos_faltantes»).
+RUTA_CAMPO = re.compile(r'\b[a-z]+(?:_[a-z]+)*\.[a-z]+_[a-z_]+\b|\b[a-z]+_[a-z_]+\.[a-z]+\b')
+INTERVALO_CORCHETES = re.compile(r'\[\s*\d+(?:[.,]\d+)?\s*[,;]\s*\d+(?:[.,]\d+)?\s*\]')
+
+
+def _formato_tecnico(texto, codigos=True):
+    """Controles de formato comunes a todos los submódulos (PG3, pruebas del 13/11).
+
+    Antes solo los tenía S4: S3 dejaba pasar «DESCONOCIDO», «solape_estado» o
+    «[0,166, 0,5]» y S1 dejaba pasar «pedido.campos_faltantes».
+    """
+    motivos = []
+    m = RUTA_CAMPO.search(texto)
+    if m:
+        motivos.append(f'Copia la ruta de un campo («{m.group(0)}»): decí con palabras qué dato es.')
+    for m in (TECNICO.finditer(texto) if codigos else ()):
+        tok = m.group(0)
+        if tok.lower().startswith(('pv_', 'ev_', 'ev-', 'ped_', 'lf_')):
+            continue       # identificadores de puesto, evidencia, pedido y listado
+        motivos.append(f'Usa el código técnico «{tok}»: escribilo con palabras (por ejemplo '
+                       '«no se conoce», «estimado», «Recomendado con reservas», «provisional»).')
+        break
+    if INTERVALO_CORCHETES.search(texto):
+        motivos.append('Escribe un intervalo entre corchetes: decí «entre X e Y» o, si los dos '
+                       'valores son iguales, solo el valor.')
+    return motivos
 METRICAS = ('afinidad', 'prioridad', 'fuerza', 'confiabilidad', 'solape', 'indice', 'margen',
             'activacion', 'grado', 'pertenencia', 'urgencia')
 AUSENCIA = re.compile(

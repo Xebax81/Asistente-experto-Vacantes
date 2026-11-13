@@ -56,12 +56,20 @@ def resolver_puesto(grafo, puesto_id, servicio, turno):
                             for f in registrados) + '. ¿Para cuál es la consulta?')
 
 
-def mensaje_listado_vacio(grafo, puesto):
-    """Regla A3: se arma con la consulta 5, sin invocar al LLM."""
+def mensaje_listado_vacio(grafo, puesto, evaluados=None):
+    """Regla A3: se arma con la consulta 5, sin invocar al LLM.
+
+    PG3 (pruebas 13/11, B07): si el Listado_Final no llegó a escribirse, n_descartados
+    viene nulo y el texto decía «Se evaluaron 0 empleados». La cadena pasa ahora el
+    conteo de S2 (evaluados) para usarlo en ese caso.
+    """
     f = grafo.una('S4-5-listado-vacio', puesto=puesto) or {}
+    n = f.get('descartados')
+    if n is None:
+        n = evaluados if evaluados is not None else 0
     lineas = [f"No hay candidatos válidos para la vacante {f.get('puesto')} "
               f"({f.get('servicio')}, turno y zona del pedido). Se evaluaron "
-              f"{f.get('descartados') or 0} empleados y ninguno superó los controles "
+              f"{n} empleados y ninguno superó los controles "
               f"excluyentes de S2.", '']
 
     # S2-R01: una misma aptitud puede venir del pedido y del catálogo. Si viene de
@@ -101,7 +109,11 @@ def mensaje_listado_vacio(grafo, puesto):
     if f.get('motivo_critico'):
         lineas.append('El motivo que más descartes concentra es: '
                       f"{_legible_en_frase(f['motivo_critico'])} (S2-R09).")
-    lineas.append(f"Urgencia registrada: {f.get('urgencia')} ({f.get('urgencia_estado')}).")
+    # PG3 (B07): sin «None (DESCONOCIDO)» ni códigos de estado en el texto.
+    if f.get('urgencia'):
+        lineas.append(f"Urgencia registrada: {f.get('urgencia')}.")
+    else:
+        lineas.append('Urgencia registrada: no determinada.')
     lineas.append('El sistema no propone candidatos que no cumplen los requisitos excluyentes '
                   '(regla A3); cómo cubrir la vacante queda a criterio de RR. HH.')
     return '\n'.join(lineas)
@@ -277,7 +289,8 @@ def comparacion_orden(objetivo, todas):
                    if o.get('prioridad') is not None and filas[i].get('prioridad') is not None else None)
             vecinos.append({'legajo': o.get('legajo'), 'empleado': o.get('empleado'), 'relacion': rel,
                             'prioridad': o.get('prioridad'), 'diferencia_de_prioridad': dif})
-    return {'criterio': 'el listado se ordena por prioridad (criterio PROVISIONAL)',
+    # PG3 (B09): en minúscula; el validador rechaza ahora «PROVISIONAL» en el texto.
+    return {'criterio': 'el listado se ordena por prioridad (criterio provisional)',
             'candidato': objetivo, 'listado_por_prioridad': tabla, 'vecinos': vecinos}
 
 

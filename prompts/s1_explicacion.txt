@@ -4,7 +4,7 @@ Vas a recibir la FICHA S1: el resultado estructurado que devolvió la base de co
 
 CÓMO ARMAR EL TEXTO (en este orden, solo lo que corresponda)
 1. Qué se entendió: para cada vacante, el servicio (vacantes[i].servicio.nombre), el turno (vacantes[i].turno.nombre) y la zona.
-   Si vacantes[i].servicio.nombre es null, el servicio NO se reconoció: no lo presentes como un servicio («la vacante del servicio X»). Decí que el texto escrito (vacantes[i].servicio.texto) no está en el catálogo de servicios.
+   Si vacantes[i].servicio.nombre es null, no lo presentes como un servicio («la vacante del servicio X») y usá la frase de vacantes[i].servicio.frase: si es «no se indicó en el pedido», decí que el pedido no indica el servicio; si es «no está en el catálogo de servicios», decí que el texto escrito (vacantes[i].servicio.texto) no está en el catálogo. No digas que un servicio «indicado» no se reconoció si el pedido no indicó ninguno.
    La zona tiene CUATRO estados distintos en vacantes[i].zona.resolucion y NO se pueden mezclar. Usá la frase que corresponde a cada uno, que ya viene en vacantes[i].zona.frase:
    - "declarada": la zona está en vacantes[i].zona.nombre y fue indicada en el pedido.
    - "heredada": la zona está en vacantes[i].zona.nombre y se tomó del servicio porque el pedido no la indica (S1-R07).
@@ -19,10 +19,10 @@ CÓMO ARMAR EL TEXTO (en este orden, solo lo que corresponda)
    Informá la categoría (urgencia.categoria) junto con el índice (urgencia.indice). Por ejemplo: «la urgencia quedó media, con un índice de 0,496».
    Si nombrás un valor de pertenencia, usá la palabra «pertenencia». Si nombrás la fuerza de una regla, usá la palabra «activación» y nombrá la regla. NUNCA presentes un valor de pertenencia ni una fuerza de activación como si fuera el grado o el nivel de urgencia.
    Podés explicar por qué dio esa categoría usando las expresiones del pedido y la regla dominante (urgencia.regla_dominante).
-   Si urgencia.categoria es null, decí que la urgencia no se pudo determinar y no cites ningún número.
+   Si urgencia.categoria es null, decí que la urgencia no se pudo determinar porque el pedido no indica para cuándo se necesita, y no cites ningún número.
 4. Estado y próximo paso, según pedido.estado:
    - "completo": el pedido está completo y pasa a la evaluación de aptitud y disponibilidad (S2). No digas que falta algo ni preguntes por servicio, turno o zona.
-   - "en_espera": queda en espera porque faltan los campos de pedido.campos_faltantes. Hacé las preguntas de pedido.preguntas_aclaracion, copiadas tal cual, y ninguna otra.
+   - "en_espera": decí que queda en espera y nombrá con palabras los datos que faltan (los de la lista campos_faltantes del pedido: servicio, turno, zona o plazo). Ejemplo: «queda en espera porque faltan el servicio y el turno». Nunca escribas el nombre del campo ni su ruta. Hacé las preguntas de pedido.preguntas_aclaracion, copiadas tal cual, y ninguna otra; si la zona falta pero no tiene pregunta, es porque se va a tomar del servicio.
    - "no_es_pedido": explicá que el mensaje no es un pedido de cobertura y qué datos necesita uno (servicio o sede, turno y, si hace falta, zona, aptitudes y para cuándo). No cites reglas ni grados.
 5. Advertencias: mencioná cada una de las que figuran en advertencias.
 

@@ -8,8 +8,11 @@ const campo = $('#texto');
 const boton = $('#enviar');
 
 // Casos precargados. Los cuatro primeros son los casos de inferencia del PG2
-// (sección d.3), con el texto exacto de ped_001 a ped_004 del script de carga:
-// así la defensa muestra que el integrado recalcula lo que el PG2 tenía cargado.
+// (sección d.3), con el texto exacto de ped_001 a ped_004 del script de carga.
+// PG3 (pruebas 13/11, B03): cada caso registra un puesto NUEVO, y en un puesto nuevo la
+// cercanía se estima por zona (no es el traslado medido del PG2), así que la afinidad y el
+// orden pueden diferir de pv_001..pv_003. La reproducción exacta del PG2 se muestra con
+// «python -m api.main --recalcular pv_001 --simular» (ver CAMBIOS.md, corrida del 13/11).
 // El control de completitud de S1 queda probado por dos casos del PI4: C3 (igual al caso 3
 // del PG2: faltan servicio y turno, S1-R01) y C4 (zona informada y no reconocida, S1-R07).
 // Los cinco primeros recorren la cadena completa (pedido de cobertura). Los cinco
@@ -172,10 +175,22 @@ function avisoSimulacion(r) {
   // evaluación original. Se marca de forma visible y se muestran los dos valores.
   const d = r.datos;
   if (!d || !d.hipotetico) return '';
-  const base = Array.isArray(d.base_grafo) ? d.base_grafo[0] : d.base_grafo;
-  const sim = Array.isArray(d.simulada) ? d.simulada[0] : d.simulada;
+  // PG3 (pruebas 13/11, B17): mismo formato que el resto (coma y tres decimales) y
+  // etiquetas legibles para las entradas que se cambiaron.
+  const valor = (x) => {
+    const a = Array.isArray(x) ? x : [x, x];
+    if (a[0] === null || a[0] === undefined) return '–';
+    return a[0] === a[1] ? num(a[0]) : `${num(a[0])} – ${num(a[1])}`;
+  };
+  const base = valor(d.base_grafo);
+  const sim = valor(d.simulada);
+  const ENTRADAS = {
+    cercania_min: (v) => `traslado: ${v} min`,
+    experiencia_meses: (v) => `experiencia: ${v} meses`,
+    desempeno: (v) => `desempeño: ${v}`,
+  };
   const cambios = Object.entries(d.entrada_simulada || {})
-    .map(([k, v]) => `${esc(k.replace(/_/g, ' '))}: ${esc(v)}`).join(' · ');
+    .map(([k, v]) => esc(ENTRADAS[k] ? ENTRADAS[k](v) : `${k.replace(/_/g, ' ')}: ${v}`)).join(' · ');
   return `<div class="simulacion">
     <div class="simulacion-cab">Simulación hipotética — no se guarda en la base</div>
     <div class="simulacion-cuerpo">
@@ -327,12 +342,18 @@ async function enviar(texto) {
       'la cadena completa (S1 → S2 → S3 → S4) puede tardar hasta dos minutos.';
   }, 8000);
 
+  // PG3 (pruebas 13/11, B20): sin límite, una consulta con el modelo saturado podía
+  // quedar esperando varios minutos sin aviso. Se corta a los 4 minutos.
+  const corte = new AbortController();
+  const limite = setTimeout(() => corte.abort(), 240000);
   try {
     const res = await fetch('/api/consulta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ texto, sesion: SESION }),
+      signal: corte.signal,
     });
+    clearTimeout(limite);
     const r = await res.json();
     clearTimeout(aviso);
     esperando.remove();
@@ -350,8 +371,12 @@ async function enviar(texto) {
     if ((r.puestos || []).length) cargarPuestos();
   } catch (e) {
     clearTimeout(aviso);
+    clearTimeout(limite);
     esperando.remove();
-    agregar('asistente error', 'No se pudo contactar al servidor: ' + esc(e.message));
+    agregar('asistente error', e.name === 'AbortError'
+      ? 'La consulta tardó más de 4 minutos y se cortó. Puede que el modelo de lenguaje esté ' +
+        'saturado: probá de nuevo en un rato.'
+      : 'No se pudo contactar al servidor: ' + esc(e.message));
   } finally {
     ocupado = false;
     boton.disabled = false;
@@ -421,7 +446,8 @@ fetch('/api/estado').then((r) => r.json()).then((e) => {
   const grafoOk = e.grafo && e.grafo.ok;
   const faltan = (e.prompts_faltantes || []).length;
   el.className = 'estado ' + (grafoOk && !faltan ? 'ok' : 'mal');
-  el.textContent = `${e.config.llm_proveedor} · ${e.config.llm_modelo} · ` +
+  // PG3 (B16): el modelo se elige en la primera consulta; antes quedaba «gemini ·  ·».
+  el.textContent = `${e.config.llm_proveedor} · ${e.config.llm_modelo || 'modelo automático'} · ` +
     (grafoOk ? 'Neo4j OK' : 'Neo4j con problemas') +
     (faltan ? ` · faltan ${faltan} prompts` : '');
   el.title = (e.grafo.informe || []).join('\n') +

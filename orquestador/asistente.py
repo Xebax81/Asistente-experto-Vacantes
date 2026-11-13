@@ -86,6 +86,35 @@ def olvidar_pendiente(sesion='web'):
     _pendiente.pop(sesion, None)
 
 
+def reiniciar_sesion(sesion='web'):
+    """Botón «Empezar de nuevo»: olvida el pedido y la consulta en espera (PG3, B02)."""
+    _pendiente.pop(sesion, None)
+    _consulta_pendiente.pop(sesion, None)
+
+
+# PG3 (pruebas 13/11, B02): S2, S3 y S4 preguntan «¿A cuál te referís?» cuando hay varias
+# vacantes del mismo servicio, pero la respuesta («pv_001») llegaba sin la pregunta
+# original y el prompt maestro no sabía qué hacer con ella. Se recuerda la consulta que
+# quedó esperando la elección y, si el mensaje siguiente parece la respuesta, se vuelve
+# a correr la misma consulta con el dato agregado. Igual que con los pedidos, solo una
+# por sesión y se olvida apenas se usa o se cambia de tema.
+_consulta_pendiente = {}
+DESTINOS_CONSULTA = ('S2_aptitud', 'S3_afinidad', 'S4_explicacion')
+_ID_PUESTO = re.compile(r'\bpv_\w+', re.IGNORECASE)
+
+
+def _parece_respuesta(texto):
+    """Un id de puesto, o un mensaje corto que no es una pregunta nueva."""
+    t = texto.strip()
+    return bool(_ID_PUESTO.search(t)) or (len(t.split()) <= 6 and '?' not in t)
+
+
+def _consulta_completada(pendiente, respuesta):
+    ids = _ID_PUESTO.findall(respuesta)
+    dato = f'el puesto {ids[0]}' if ids else respuesta.strip().rstrip('.')
+    return f"{pendiente['texto'].rstrip(' ?¿.')} (en {dato})?"
+
+
 def _esquema_ok(d):
     if not isinstance(d, dict):
         return ['La respuesta no es un objeto JSON.']
@@ -110,6 +139,7 @@ def enrutar(grafo, texto, pendiente=None):
     grafo.traza.agregar('enrutamiento', {'submodulo': 'maestro', **r.como_dict()})
     if r.datos is None:
         return {'submodulo': 'fuera_de_dominio', 'confianza': 'baja', 'motivo': None,
+                'enrutamiento_fallido': True,   # PG3 (B11)
                 'servicio_texto': None, 'turno_texto': None, 'puesto_id_texto': None,
                 'empleados_texto': [], 'texto_no_interpretado': [texto]}
     return r.datos
@@ -134,8 +164,9 @@ def cadena_completa(grafo, texto):
                    'faltantes': r1['ficha']['pedido'].get('campos_faltantes', []),
                    'puestos': r1.get('puestos_registrados', [])})
     if r1['ficha']['pedido']['estado'] != 'completo':
+        # PG3 (B14): se devuelve la validación de S1 para que la interfaz la muestre.
         return {'submodulo': 'cadena_completa', 'etapas': etapas, 'respuesta': r1['respuesta'],
-                'ficha_s1': r1['ficha'], 'corte': 'S1',
+                'ficha_s1': r1['ficha'], 'corte': 'S1', 'fidelidad': fidelidad,
                 'motivo_corte': 'el pedido quedó en espera de datos'}
     puestos = r1.get('puestos_registrados') or []
     if not puestos:
@@ -167,16 +198,37 @@ def cadena_completa(grafo, texto):
                                      for r in f2['evaluacion']['descartados']],
                        'conteo_motivos': f2['evaluacion']['conteo_motivos']})
 
+        evaluados = f2['evaluacion']['n_validos'] + f2['evaluacion']['n_descartados']
         if not f2['evaluacion']['n_validos']:
             # S2-R09 + regla A3: no hay nadie; S4 informa el listado vacío sin LLM.
             inferencia.recalcular_puesto(grafo, puesto, persistir=config.ESCRITURA_HABILITADA)
             etapas.append({'submodulo': 'S4', 'puesto': puesto, 'regla': 'A3'})
-            partes.append(s4_explicacion.mensaje_listado_vacio(grafo, puesto))
+            partes.append(s4_explicacion.mensaje_listado_vacio(grafo, puesto, evaluados=evaluados))
             fidelidad.setdefault('S4', []).append('sin LLM (A3)')
             continue
 
+        # PG3 (pruebas 13/11, B06): S1 informa las aptitudes tal como las pidió el pedido;
+        # S2 agrega las que exige el tipo de servicio (S2-R01). Se avisa para que la
+        # aptitud «deseable» de S1 no parezca contradecir los descartes de S2.
+        promovidas = [r for r in (f2.get('requisitos') or {}).get('excluyentes', [])
+                      if r.get('origen') == 'catalogo' or r.get('promovida')]
+        if promovidas:
+            nombres = ', '.join(s4_explicacion.legible(r['aptitud']) for r in promovidas)
+            partes.append(f'Requisito del tipo de servicio (S2-R01): {nombres} es excluyente '
+                          'para este puesto aunque el pedido no la haya pedido así, por eso '
+                          'S2 descarta a quien no la tiene vigente.')
+
         # --- S3 + S4 : afinidad, categoria y listado final
         inf = inferencia.recalcular_puesto(grafo, puesto, persistir=config.ESCRITURA_HABILITADA)
+        if inf.get('error'):
+            # PG3 (pruebas 13/11, B01): antes el error se ignoraba y S4 terminaba diciendo
+            # «No hay candidatos válidos… Se evaluaron 0 empleados», aunque S2 sí los tenía.
+            validos = ', '.join(f"{r.get('nombre') or r['legajo']} ({r['legajo']})"
+                                for r in f2['evaluacion']['validos'])
+            etapas.append({'submodulo': 'S3', 'puesto': puesto, 'error': inf['error']})
+            partes.append(f'Para el puesto {puesto}, S2 dejó como válidos a: {validos}. '
+                          f"No se pudo calcular la afinidad ni el orden: {inf['error']}")
+            continue
         etapas.append({'submodulo': 'S3', 'puesto': puesto, 'n_validos': inf.get('n_validos'),
                        'version': inf.get('version_s3')})
         etapas.append({'submodulo': 'S4', 'puesto': puesto, 'listado': inf.get('listado'),
@@ -216,9 +268,19 @@ def responder(texto, grafo=None, traza=None, sesion='web'):
                     'pregunta': texto, 'segundos': 0}
     inicio = datetime.now()
     pendiente = pedido_pendiente(sesion)
+    consulta_previa = _consulta_pendiente.pop(sesion, None)
     texto_efectivo = texto
     try:
-        ruta = enrutar(grafo, texto, pendiente)
+        if consulta_previa and _parece_respuesta(texto):
+            # B02: se responde la aclaración pendiente sin volver a enrutar.
+            texto_efectivo = _consulta_completada(consulta_previa, texto)
+            ruta = {'submodulo': consulta_previa['destino'], 'confianza': 'alta',
+                    'motivo': 'respuesta_a_aclaracion'}
+            traza.agregar('continuacion', {
+                'submodulo': 'maestro', 'consulta_original': consulta_previa['texto'],
+                'dato_aportado': texto, 'texto_reinterpretado': texto_efectivo})
+        else:
+            ruta = enrutar(grafo, texto, pendiente)
         destino = ruta['submodulo']
 
         if destino == 'continuacion_pedido':
@@ -237,7 +299,16 @@ def responder(texto, grafo=None, traza=None, sesion='web'):
                     'texto_reinterpretado': texto_efectivo})
 
         if destino == 'fuera_de_dominio':
-            if ruta.get('motivo') == 'cambio_de_decision':
+            if ruta.get('enrutamiento_fallido'):
+                # B11: el prompt maestro no devolvió un JSON válido; no es culpa del usuario.
+                respuesta = ('No pude interpretar la consulta. ¿Podés reformularla en una o dos '
+                             'oraciones? Por ejemplo: «Necesito cubrir el turno tarde en el Hospital '
+                             'Central para mañana» o «¿Por qué quedó afuera Bruno Gómez en pv_001?».')
+            elif ruta.get('submodulo') == 'continuacion_pedido':
+                # B18: parecía la respuesta a una pregunta, pero no hay pedido esperando.
+                respuesta = ('No hay ningún pedido esperando un dato. Si querés registrar uno, '
+                             'escribí el pedido completo: servicio, turno y para cuándo.')
+            elif ruta.get('motivo') == 'cambio_de_decision':
                 respuesta = ('No puedo cambiar categorías, prioridades ni el orden: los asigna la '
                              'base de conocimiento. Sí puedo explicarte en qué se apoya cada '
                              'decisión registrada.')
@@ -266,11 +337,16 @@ def responder(texto, grafo=None, traza=None, sesion='web'):
             # Si S1 lo deja en espera, la cadena se corta sola y devuelve las preguntas.
             resultado = cadena_completa(grafo, texto_efectivo)
         elif destino == 'S2_aptitud':
-            resultado = _responder_s2(grafo, texto)
+            resultado = _responder_s2(grafo, texto_efectivo)
         elif destino == 'S3_afinidad':
-            resultado = s3_afinidad.responder(grafo, texto)
+            resultado = s3_afinidad.responder(grafo, texto_efectivo)
         else:
-            resultado = s4_explicacion.responder(grafo, texto)
+            resultado = s4_explicacion.responder(grafo, texto_efectivo)
+
+        # B02: si un submódulo de consulta pidió elegir el puesto o la persona, se
+        # recuerda la consulta para completar la próxima respuesta.
+        if resultado.get('aclaracion') and destino in DESTINOS_CONSULTA:
+            _consulta_pendiente[sesion] = {'texto': texto_efectivo, 'destino': destino}
 
         resultado['enrutamiento'] = ruta
 
@@ -357,7 +433,8 @@ def _responder_s2(grafo, texto):
 def _guardar(resultado):
     try:
         config.DIR_TRAZAS.mkdir(exist_ok=True)
-        nombre = datetime.now().strftime('%Y%m%d_%H%M%S') + '.json'
+        # PG3 (B13): con microsegundos; antes dos consultas en el mismo segundo se pisaban.
+        nombre = datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '.json'
         (config.DIR_TRAZAS / nombre).write_text(
             json.dumps(resultado, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
     except OSError:
