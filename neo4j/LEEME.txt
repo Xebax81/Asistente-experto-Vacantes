@@ -2,7 +2,8 @@ Base de conocimiento del asistente (Grupo 5 – 5K10, PG3)
 
   Grupo_5_PG2_U1_carga.cypher      script de carga del grafo del PG2 (bloques 1 a 9)
   S1_PI4_complemento.cypher        sinónimos de aptitudes y marcadores de S1-R02 (PI4 de S1)
-  Grupo_5_PG2_U1_consultas.cypher  consultas del PG2, como referencia (copiar desde el Drive del PG2)
+  Grupo_5_PG3_consultas.cypher     catálogo de las consultas que ejecuta el asistente (lectura y escritura)
+  Grupo_5_PG2_U1_consultas.cypher  consultas del PG2, como referencia (opcional: copiar desde el Drive del PG2)
   Grupo_5_PG3_export.cypher        exportación del grafo completo (la genera --exportar)
   Grupo_5_PG3_export.json          lo mismo en JSON
 

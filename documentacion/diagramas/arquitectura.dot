@@ -1,0 +1,57 @@
+digraph G {
+  graph [rankdir=TB, compound=true, fontname="DejaVu Sans", fontsize=11, nodesep=0.4, ranksep=0.5, bgcolor="white", pad=0.3];
+  node  [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=10, color="#5b6b7a", fillcolor="#f3f6f9", margin="0.14,0.07"];
+  edge  [fontname="DejaVu Sans", fontsize=8.5, color="#5b6b7a", arrowsize=0.7];
+
+  usuario [label="Usuario\nreclutador / supervisor de RR. HH.", fillcolor="#fff4d6", color="#b98a1a"];
+
+  subgraph cluster_if { label="Interfaz de usuario"; style="rounded,dashed"; color="#9aa7b4"; fontsize=10;
+    web [label="Interfaz web\nchat + panel de trazabilidad"];
+    api [label="API FastAPI\nPOST /api/consulta (entrada única)", fillcolor="#e6eef7"];
+    cli [label="Consola\npython -m api.main"];
+  }
+
+  subgraph cluster_orq { label="Orquestación"; style="rounded"; color="#3d6a99"; fontsize=10; fontcolor="#3d6a99";
+    orq [label="Orquestador · responder()\ncadena S1 → S2 → S3 → S4\npedido en espera por sesión", fillcolor="#dbe7f5"];
+    maestro [label="Prompt maestro (S0)\nenruta y fija los límites", fillcolor="#dbe7f5"];
+  }
+
+  subgraph cluster_raz { label="Módulos de razonamiento (deciden)"; style="rounded"; color="#2f7d4f"; fontsize=10; fontcolor="#2f7d4f";
+    s1 [label="S1 · Requisitos\nreglas S1-R · urgencia difusa", fillcolor="#e3f3e8"];
+    s2 [label="S2 · Aptitud y disponibilidad\nreglas crisp S2-R01..R10", fillcolor="#e3f3e8"];
+    s3 [label="S3 · Afinidad\nmotor difuso · intervalos", fillcolor="#e3f3e8"];
+    s4 [label="S4 · Clasificación y listado\nprioridad difusa (FZ)", fillcolor="#e3f3e8"];
+    motor [label="Motor difuso Mamdani\n(compartido)", fillcolor="#f0f7f2"];
+  }
+
+  subgraph cluster_llm { label="Modelo de lenguaje (no decide)"; style="rounded"; color="#8a4fa3"; fontsize=10; fontcolor="#8a4fa3";
+    llm [label="Pasarela LLM única\nGemini · salidas JSON", fillcolor="#f2e8f7"];
+    val [label="Validador de fidelidad\nrechaza → reintento o respaldo", fillcolor="#f2e8f7"];
+  }
+
+  subgraph cluster_kb { label="Base de conocimiento (fuente de verdad)"; style="rounded"; color="#b0533c"; fontsize=10; fontcolor="#b0533c";
+    grafo [label="Acceso único al grafo\nCypher fijo y parametrizado · traza", fillcolor="#f8e9e4"];
+    neo [label="Neo4j Aura\nframes · instancias · reglas · funciones\nde pertenencia · evidencias · listados", shape=cylinder, fillcolor="#f8e9e4", color="#b0533c"];
+  }
+
+  fuentes [label="Fuentes de información\nlegajos, aptitudes, disponibilidad,\ncatálogos y alias, expresiones de urgencia,\nparámetros de los PI3, criterios del reclutador", shape=note, fillcolor="#fdfbf3", color="#9a8a5a"];
+  trazas [label="Trazas JSON\npor consulta", shape=note, fillcolor="#fdfbf3", color="#9a8a5a"];
+
+  usuario -> web [label=" texto libre"];
+  usuario -> cli [style=dashed];
+  web -> api;
+  api -> orq; cli -> orq [style=dashed];
+  orq -> maestro [label=" 1. ¿qué submódulo?"];
+  orq -> s1 [lhead=cluster_raz, label=" 2. ejecuta"];
+  s1 -> s2 [label=" puesto", color="#2f7d4f", fontcolor="#2f7d4f"];
+  s2 -> s3 [label=" válidos", color="#2f7d4f", fontcolor="#2f7d4f"];
+  s3 -> s4 [label=" afinidad", color="#2f7d4f", fontcolor="#2f7d4f"];
+  s3 -> motor [style=dotted, arrowhead=none];
+  maestro -> llm [style=dashed, color="#8a4fa3"];
+  s4 -> llm [ltail=cluster_raz, lhead=cluster_llm, style=dashed, color="#8a4fa3", fontcolor="#8a4fa3", label=" extraer (S1-S3)\n redactar (S1-S4)"];
+  llm -> val [color="#8a4fa3"];
+  s4 -> grafo [ltail=cluster_raz, label=" lee y persiste"];
+  grafo -> neo [dir=both, label=" Cypher"];
+  fuentes -> neo [label=" scripts .cypher", style=dashed];
+  orq -> trazas [style=dotted];
+}

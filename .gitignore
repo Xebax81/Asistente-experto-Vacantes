@@ -3,7 +3,6 @@
 __pycache__/
 *.pyc
 trazas/*.json
-pruebas/salida_e2e.md
 proyecto_anterior/
 
 # copias de respaldo previas a los cambios (no se publican)
@@ -13,3 +12,6 @@ proyecto_anterior/
 trazas/*
 !trazas/.gitkeep
 pruebas/diagnostico_neo4j.log
+
+# copias que deja la app de escritorio
+Claude outputs/

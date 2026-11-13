@@ -1,0 +1,24 @@
+digraph F {
+  graph [rankdir=TB, fontname="DejaVu Sans", nodesep=0.25, ranksep=0.3, pad=0.2, bgcolor="white"];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=10, color="#5b6b7a", fillcolor="#e3f3e8", margin="0.12,0.06"];
+  edge [fontname="DejaVu Sans", fontsize=8.5, color="#5b6b7a", arrowsize=0.7];
+  p [label="Pedido en\nlenguaje natural", fillcolor="#fff4d6", color="#b98a1a"];
+  s1 [label="S1\ninterpreta, valida\ny calcula urgencia"];
+  e [label="¿faltan datos?", shape=diamond, fillcolor="#f3f6f9", fontsize=9];
+  q [label="pregunta de\naclaración\n(pedido en espera)", fillcolor="#f3f6f9"];
+  s2 [label="S2\ndescarta por reglas\nexcluyentes"];
+  v [label="¿hay\nválidos?", shape=diamond, fillcolor="#f3f6f9", fontsize=9];
+  a3 [label="S4 · regla A3\nlistado vacío\ncon motivos", fillcolor="#f3f6f9"];
+  s3 [label="S3\nafinidad difusa\n(intervalo si falta un dato)"];
+  s4 [label="S4\nprioridad, categoría\ny Listado_Final"];
+  x [label="Explicación redactada\npor el LLM y validada", fillcolor="#f2e8f7", color="#8a4fa3"];
+  p -> s1 -> e;
+  e -> q [label="sí"];
+  e -> s2 [label="no"];
+  s2 -> v;
+  v -> a3 [label="no"];
+  v -> s3 [label="sí"];
+  s3 -> s4 -> x;
+  {rank=same; e; q}
+  {rank=same; v; a3}
+}
