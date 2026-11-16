@@ -276,8 +276,14 @@ function pintarTraza(r) {
       <div class="campo"><b class="cypher">${esc(p.consulta)}</b> · ${p.filas} fila(s) · ${p.ms} ms
       <pre>${esc(JSON.stringify(p.parametros, null, 2))}</pre>
       ${p.cypher ? `<details class="sentencia"><summary>Ver la sentencia Cypher</summary><pre>${esc(p.cypher)}</pre></details>` : ''}</div>`).join('');
+    // PG3 (devolución del PG3, 16/11): de dónde salieron los parámetros del motor difuso.
+    const par = pasos.find((p) => p.etapa === 'parametros_difusos');
+    const origen = par ? `<div class="campo"><b>Parámetros difusos:</b> ${
+      par.fuente === 'grafo' ? 'leídos de Neo4j (PG3-parametros-motor)'
+        : 'los del código, como respaldo'} — ${esc(par.detalle || '')}${
+      (par.diferencias || []).length ? `<pre>${esc(par.diferencias.join('\n'))}</pre>` : ''}</div>` : '';
     html += bloque('3 · Consultas a Neo4j (solo lectura, parametrizadas)',
-      `${lecturas.length}`, filas, 'abierta');
+      `${lecturas.length}`, origen + filas, 'abierta');
   }
 
   // 4. escrituras

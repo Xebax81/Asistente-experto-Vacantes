@@ -662,19 +662,28 @@ def validar_s4(datos_llm, datos, exigencias=None):
                 break
 
     # ---------------------------------------- 4. CP1: deseable presentado como advertencia
+    # PG3 (devolución del PG3, 16/11): falso positivo en E2E-1. «no tiene advertencias pero no
+    # tiene la aptitud deseable X» se rechazaba porque «advertencias» estaba en la misma
+    # cláusula. Ahora solo cuenta si entre «advertencia» y la aptitud no aparece «aptitud» o
+    # «deseable» (el sustantivo que de verdad la nombra), y se mira el tramo de cada candidato.
     todas_adv = {a for f in fichas.values() for a in f.get('advertencias') or []}
     for l, f in fichas.items():
+        tramo = segs.get(l) or plano
         for d in (f.get('deseables_faltantes') or []) + (f.get('deseables_vencidos') or []):
             if d in todas_adv:
                 continue
-            for i in _mencion_aptitud(plano, d):
-                if 'advertenc' in _clausula_previa(plano, i, 60):
+            for i in _mencion_aptitud(tramo, d):
+                previo = _clausula_previa(tramo, i, 60)
+                k = previo.rfind('advertenc')
+                if k >= 0 and not re.search(r'aptitud|deseabl', previo[k:]):
                     motivos.append(f'Presenta {d} como una advertencia, pero es una aptitud '
                                    f'deseable que le falta a {l}.')
                     break
         for a in f.get('advertencias') or []:
-            for i in _mencion_aptitud(plano, a):
-                if re.search(r'deseabl', _clausula_previa(plano, i, 40)):
+            for i in _mencion_aptitud(tramo, a):
+                previo = _clausula_previa(tramo, i, 40)
+                k = previo.rfind('deseabl')
+                if k >= 0 and 'advertenc' not in previo[k:]:
                     motivos.append(f'Presenta la advertencia {a} como una aptitud deseable.')
                     break
 
@@ -715,4 +724,51 @@ def validar_s4(datos_llm, datos, exigencias=None):
     if re.search(r'\b(es|estado[^.]{0,25}) con dato\b(?!\s+(razonablemente|preciso|impreciso))', plano):
         motivos.append('La frase «con dato» es un estado interno: decí qué se observó o no digas nada.')
 
+    # ---------------------------------------- 7. VENCIDA no es FALTANTE (devolución del PG3)
+    # E2E-9 decía «no tiene la aptitud deseable manejo de residuos patogénicos (vencida)» y
+    # pasaba: este control existía en S2 (devolución del PI4 de S2) pero no en S4.
+    motivos.extend(_vencida_vs_faltante(plano, fichas, segs))
+
     return list(dict.fromkeys(motivos))
+
+
+def _nombre_aptitud(x):
+    return x.get('aptitud') if isinstance(x, dict) else x
+
+
+def _clausula_siguiente(plano, i, largo):
+    resto = plano[i:i + largo]
+    cortes = [resto.find(c) for c in '.;,:' if resto.find(c) >= 0]
+    return resto[:min(cortes)] if cortes else resto
+
+
+def _vencida_vs_faltante(plano, fichas, segs):
+    """Una deseable vencida la persona la tiene (vencida); una faltante no la tiene.
+    Revisa, en el tramo del texto de cada candidato, cómo se nombra cada aptitud."""
+    motivos = []
+    for l, f in fichas.items():
+        seg = segs.get(l) or (plano if len(fichas) == 1 else '')
+        if not seg:
+            continue
+        vencidas = [_nombre_aptitud(x) for x in f.get('deseables_vencidos') or []]
+        faltantes = [_nombre_aptitud(x) for x in f.get('deseables_faltantes') or []]
+        for a in filter(None, vencidas):
+            for i in _menciones(seg, a):
+                antes = _clausula_previa(seg, i, 60)
+                if any(p in antes for p in PALABRAS_FALTA):
+                    motivos.append(f'{l}: presenta {a} como una aptitud que no tiene, pero la tiene '
+                                   'vencida. Decí «tiene la aptitud deseable …, pero vencida».')
+                    break
+                if 'venc' not in seg[max(0, i - 80):i + len(a) + 80]:
+                    motivos.append(f'{l}: nombra la aptitud deseable {a} sin decir que está vencida.')
+                    break
+        for a in filter(None, faltantes):
+            if a in vencidas:
+                continue
+            for i in _menciones(seg, a):
+                cerca = _clausula_previa(seg, i, 60) + _clausula_siguiente(seg, i, len(a) + 60)
+                if 'venc' in cerca:
+                    motivos.append(f'{l}: presenta {a} como vencida, pero no la tiene registrada: '
+                                   'es una aptitud deseable que le falta.')
+                    break
+    return motivos

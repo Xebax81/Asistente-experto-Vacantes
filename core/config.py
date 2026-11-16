@@ -68,6 +68,11 @@ MAX_INTENTOS = int(os.getenv('MAX_INTENTOS', '2'))
 FECHA_EVALUACION = os.getenv('FECHA_EVALUACION', '').strip() or None  # ISO; si no, hoy
 ESCRITURA_HABILITADA = _bool('ESCRITURA_HABILITADA', True)
 GUARDAR_TRAZAS = _bool('GUARDAR_TRAZAS', True)
+# PG3 (devolución del PG3, 16/11): de dónde toma el motor difuso los parámetros de las
+# funciones de pertenencia. grafo = de Neo4j (por defecto; si el grafo no las tiene completas
+# usa las del código y lo avisa). codigo = las de core/motor_difuso.py (para reproducir
+# resultados anteriores al cambio).
+PARAMETROS_DIFUSOS = os.getenv('PARAMETROS_DIFUSOS', 'grafo').strip().lower() or 'grafo'
 DIR_TRAZAS = RAIZ / 'trazas'
 
 VERSION_SISTEMA = 'PG3-v1'
@@ -85,5 +90,6 @@ def resumen():
         'llm_proveedor': LLM_PROVEEDOR,
         'llm_modelo': modelo(),
         'escritura_habilitada': ESCRITURA_HABILITADA,
+        'parametros_difusos': PARAMETROS_DIFUSOS,
         'version_sistema': VERSION_SISTEMA,
     }

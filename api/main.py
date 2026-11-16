@@ -126,6 +126,15 @@ def api_estado():
     estado = {'config': config.resumen(), 'prompts_faltantes': prompts.faltantes()}
     try:
         with Grafo() as g:
+            # PG3 (devolución del PG3, 16/11): el motor toma los parámetros del grafo.
+            par = g.parametros_difusos
+            if par['fuente'] == 'grafo':
+                print(f"  OK parámetros difusos: {par['detalle']}")
+                for d in par['diferencias']:
+                    print(f'     distinto del código: {d}')
+            else:
+                print(f"  XX parámetros difusos: {par['fuente']} — {par['detalle']}")
+                print('     (para cargarlos en el grafo:  python -m api.main --depurar --aplicar)')
             ok, informe = g.verificar()
             estado['grafo'] = {'ok': ok, 'informe': informe}
     except ErrorGrafo as e:
@@ -173,7 +182,7 @@ def check():
     else:
         print('  OK los 10 prompts están en prompts/')
 
-    print('\n[2] Motor difuso (parámetros de los PI3)')
+    print('\n[2] Motor difuso (valores de respaldo del código contra los publicados en los PI3)')
     import subprocess
     r = subprocess.run([sys.executable, '-m', 'core.motor_difuso'],
                        capture_output=True, text=True, cwd=str(config.RAIZ))

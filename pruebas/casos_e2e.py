@@ -317,6 +317,7 @@ CASOS = [
               lambda rs: (sorted((f1(ult(rs)).get('pedido') or {}).get('campos_faltantes') or [])
                           == ['servicio', 'turno', 'zona'],
                           (f1(ult(rs)).get('pedido') or {}).get('campos_faltantes')), PG2),
+            v_sin_tecnicos(),   # devolución del PG3: en todos los casos que generan texto
         ],
     },
     # ------------------------------------------------------------ PG2, caso 4
@@ -371,6 +372,7 @@ CASOS = [
               lambda rs: (cerca(urg(ult(rs)).get('plazo_h'), 120, 0.5) and cerca(urg(ult(rs)).get('premura'), 8, 0.5),
                           f"plazo {urg(ult(rs)).get('plazo_h')}, premura {urg(ult(rs)).get('premura')}")),
             v_urgencia('media', 0.496),
+            v_sin_tecnicos(),
         ],
     },
     # ------------------------------------------------------------ PI4 S1, caso C4 + continuación
@@ -401,6 +403,7 @@ CASOS = [
                           f"{(f1(rs[1]).get('pedido') or {}).get('estado')}")),
             V('Paso 2: la cadena sigue a S2', 'Reglas', 'etapa S2 presente',
               lambda rs: (bool(etapa(rs[1], 'S2')), [e['submodulo'] for e in rs[1].get('etapas') or []])),
+            v_sin_tecnicos(),
         ],
     },
     # ------------------------------------------------------------ consultas sobre lo registrado
@@ -418,6 +421,7 @@ CASOS = [
                      v_sin_texto('No dice que el puesto no tiene candidatos',
                                  r'no (hay|haber) (ning[uú]n )?candidatos?'),
                      v_sin_texto('Sin valores técnicos', r'SIN_DATO|DESCONOCIDO|n_validos'),
+                     v_sin_tecnicos(),
                      v_sin_escrituras()],
     },
     {
@@ -426,6 +430,7 @@ CASOS = [
         'pasos': ['¿Qué datos le faltan a Valeria Núñez en la Clínica de Luján?'],
         'verifica': [v_ruta('S3_afinidad'), v_sin_error(),
                      v_texto('Menciona la incertidumbre', r'intervalo|confiabilidad|desconocid'),
+                     v_sin_tecnicos(),
                      v_sin_escrituras()],
     },
     {
@@ -443,6 +448,17 @@ CASOS = [
                              r'(E101|Ana P).*0[.,]44|0[.,]44.*(E101|Ana P)'),
                      v_sin_texto('No le da cifra a la advertencia',
                                  r'advertencia[^.]{0,60}valor de 0[.,]\d'),
+                     # Devolución del PG3: la deseable vencida de Diego Ruiz no es una faltante.
+                     # Si nombra la aptitud, tiene que decir que está vencida (la pregunta es
+                     # por la posición: no está obligado a nombrarla).
+                     V('Si nombra la deseable, dice que está vencida', 'LLM',
+                       'sin «residuos», o con «residuos» y «vencida»',
+                       lambda rs: (not re.search(r'residuos', ult(rs).get('respuesta') or '', re.I)
+                                   or bool(re.search(r'venc', ult(rs).get('respuesta') or '', re.I)),
+                                   'no la nombra' if not re.search(r'residuos', ult(rs).get('respuesta') or '', re.I)
+                                   else (ult(rs).get('respuesta') or '')[:110] + '…')),
+                     v_sin_texto('No presenta la deseable vencida como faltante',
+                                 r'(no tiene|no posee|le falta|carece)[^.;]{0,60}residuos'),
                      v_sin_tecnicos(),
                      v_sin_escrituras()],
     },
@@ -454,15 +470,19 @@ CASOS = [
         # Devolución del PI4 de S3: la simulación queda separada de la evaluación original.
         'verifica': [v_ruta('S3_afinidad'), v_sin_error(),
                      v_texto('Aclara que es una simulación', r'simulaci|hipot'),
-                     v_texto('Aclara que la categoría no cambia', r'categor[ií]a no cambia'),
+                     # PG3 (devolución del PG3): misma forma que acepta el validador (B10):
+                     # «la categoría registrada no cambia» también es correcta.
+                     v_texto('Aclara que la categoría no cambia',
+                             r'categor[ií]a (registrada )?no cambia|no cambia la categor'),
                      v_sin_texto('No elige un ganador', r'es el mejor|el mejor candidato'),
+                     v_sin_tecnicos(),
                      v_sin_escrituras()],
     },
     # ------------------------------------------------------------ errores
     {
         'id': 'ERR-1', 'titulo': 'Entrada fuera de dominio',
         'pasos': ['¿Cuál es la mejor receta de empanadas mendocinas?'],
-        'verifica': [v_ruta('fuera_de_dominio'), v_sin_error(), v_sin_escrituras()],
+        'verifica': [v_ruta('fuera_de_dominio'), v_sin_error(), v_sin_escrituras(), v_sin_tecnicos()],
     },
     {
         'id': 'ERR-2', 'titulo': 'Intento de manipulación',
@@ -474,6 +494,7 @@ CASOS = [
                           (ult(rs).get('enrutamiento') or {}).get('motivo'))),
             v_sin_escrituras(),
             v_texto('No acepta el cambio', r'no puedo cambiar', 'Reglas'),
+            v_sin_tecnicos(),
         ],
     },
     {
@@ -485,6 +506,7 @@ CASOS = [
               lambda rs: (not re.search(r'messi[^.]*\b(es|est[aá]|queda)\s+(v[aá]lido|apto|habilitado)',
                                         ult(rs).get('respuesta') or '', re.I),
                           (ult(rs).get('respuesta') or '')[:110] + '…')),
+            v_sin_tecnicos(),
         ],
     },
     {
@@ -500,6 +522,7 @@ CASOS = [
               lambda rs: (bool(ult(rs).get('aclaracion'))
                           or bool(re.search(r'\?\s*$|a cu[aá]l|qu[eé] quer[eé]s|nombr[aá]', ult(rs).get('respuesta') or '', re.I)),
                           f"{ult(rs).get('submodulo')} · {(ult(rs).get('respuesta') or '')[:90]}")),
+            v_sin_tecnicos(),
         ],
     },
     {
@@ -517,6 +540,7 @@ CASOS = [
             V('No genera Puesto_Vacante', 'Reglas', 'sin puestos',
               lambda rs: (not (etapa(ult(rs), 'S1') or {}).get('puestos'),
                           (etapa(ult(rs), 'S1') or {}).get('puestos'))),
+            v_sin_tecnicos(),
         ],
     },
 ]

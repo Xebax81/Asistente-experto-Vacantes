@@ -401,3 +401,111 @@ modelo escribió 0,306 (la tarjeta dice 0,307) y describió la regla de experien
   del PG2 no se tocan. Nuevo endpoint `POST /api/limpiar-vacantes` (mismas consultas que
   `--limpiar --si`: `PG3-datos-de-prueba` y `W-PG3-borrar-pruebas`).
 - `S2-Q2b-puestos-registrados` devuelve además `p.origen` (solo lectura; los demás usos no cambian).
+
+## 16/11 — Devolución del PG3: parámetros difusos desde el grafo y vencida ≠ faltante
+
+Devolución de la profesora (10/10) con dos puntos de código a seguir trabajando:
+(1) «parte de los parámetros difusos sigue definida en Python, aunque existe una copia en
+Neo4j: sería conveniente que el grafo fuera la fuente efectiva»; (2) «todavía aparecen
+nombres técnicos de categorías o se confunden aptitudes faltantes con vencidas».
+Cada cambio lleva el comentario `PG3 (devolución del PG3, 16/11)` o `devolución del PG3`
+(`grep -rn "devolución del PG3"`).
+
+**Cómo deshacer.** Antes de tocar cada archivo se guardó una copia con el sufijo
+`_antes_devPG3` (fuera de git por el patrón `*_antes_dev*.*`). Para volver atrás un archivo:
+`copy core\motor_difuso_antes_devPG3.py core\motor_difuso.py`, o desde git:
+`git checkout f573df4 -- <archivo>`. Para volver solo al comportamiento anterior sin tocar el
+código: `PARAMETROS_DIFUSOS=codigo` en el `.env`. Los archivos dependen entre sí:
+`core/grafo.py` llama a funciones nuevas de `core/motor_difuso.py`, y `s4_explicacion.py` e
+`inferencia.py` usan `separar_deseables_vencidos` de `core/grafo.py`.
+
+### 1. El grafo es la fuente de los parámetros difusos
+- `core/motor_difuso.py`: los parámetros de las 30 funciones gaussianas (S1, S2, S3 v0.3 y
+  S4) quedan en un solo diccionario `PARAMETROS_CODIGO` con los nombres del grafo, y todas las
+  funciones de pertenencia los leen por `mu(variable, termino, x)`. Nuevo
+  `usar_parametros_del_grafo(filas)`: valida las 30 (que estén todas, sigma > 0, lado
+  izq/der, segunda gaussiana completa, sin dos valores distintos para el mismo término) y, si
+  están bien, el cálculo pasa a usar las del grafo; si no, sigue con las del código y deja el
+  motivo en `ORIGEN` (todo o nada, para no calcular con una mezcla). Las fórmulas, las reglas
+  y los valores no cambiaron: `python -m core.motor_difuso` sigue dando TODO COINCIDE.
+- `core/consultas.py`: nueva consulta de lectura `PG3-parametros-motor` (estructura
+  `Variable_Linguistica -> Termino -> Funcion_Pertenencia`, la que mantiene `--depurar`).
+- `core/grafo.py`: al abrir la conexión se ejecuta esa consulta y se cargan los parámetros
+  en el motor; el origen queda en la traza (etapa `parametros_difusos`) y en
+  `grafo.parametros_difusos`.
+- `core/config.py` y `.env.ejemplo`: `PARAMETROS_DIFUSOS=grafo|codigo` (por defecto grafo).
+- `api/main.py` (`--check`): informa si los parámetros salieron del grafo o del respaldo y
+  cualquier diferencia con el código.
+- `web/app.js` (panel 3 de trazabilidad) y `web/index.html` (`?v=20261116b` para que el
+  navegador no use el app.js anterior): muestra de dónde salieron los parámetros.
+- Siguen en el código, como límite declarado: las reglas difusas, las trapezoidales de S3
+  (cercanía, experiencia) y los cortes de S4 (0,367 / 0,610, calibrados con los parámetros
+  del PI3; si se cambian los de S4 en el grafo habría que recalibrarlos con `calibrar_cortes()`).
+  En el grafo conviven además dos estructuras para las mismas funciones (la del PG2 con
+  `Termino_Linguistico` y la del PG3 con `Termino`): el motor lee solo la segunda.
+
+### 2. Explicaciones: vencida no es faltante y sin códigos técnicos
+- Causa de E2E-9 («no tiene la aptitud deseable manejo de residuos patogénicos (vencida)»):
+  la carga del PG2 guardó las deseables vencidas dentro de `deseables_faltantes` con el sufijo
+  « (vencida)», y su evidencia dice «no posee … (vencida)». Diego Ruiz en pv_001 es ese caso.
+  `core/grafo.py` → `separar_deseables_vencidos()` y `corregir_evidencia_vencida()` las pasan
+  a `deseables_vencidos` al leer (no se modifica el grafo); se aplican en
+  `submodulos/s4_explicacion.py` (fichas, otros candidatos y evidencias) y en
+  `submodulos/inferencia.py` (recálculo de un puesto, para no volver a escribir la evidencia mal).
+- `core/validador.py` → `validar_s4`, control 7: rechaza nombrar una deseable vencida con
+  «no tiene / le falta / carece…», nombrarla sin decir que está vencida, y presentar como
+  vencida una que falta. El control existía en S2 (devolución del PI4 de S2) pero no en S4.
+- E2E-10 («manteniéndose como Recomendado_con_reservas»): el texto de `salida_e2e.md` es de la
+  corrida del 13/11 15:56; el validador actual ya lo rechaza (B10 y controles de formato del
+  13/11). Lo que faltaba: `pruebas/casos_e2e.py` ahora aplica `v_sin_tecnicos()` a todos los
+  casos que devuelven texto (antes solo E2E-1, 2, 4 y 9), y E2E-9 verifica además que diga
+  «vencida» y que no la presente como faltante.
+- `submodulos/s3_afinidad.py`: los textos de respaldo (cuando el LLM no logra una explicación
+  válida) mostraban `Recomendado_con_reservas`, `PROVISIONAL` y la afinidad entre corchetes;
+  ahora usan los nombres legibles de S4 y «0,601» o «entre X y Y».
+
+### Verificación (16/11, sin Neo4j ni LLM)
+- `python -m pruebas.prueba_devolucion_PG3` (nueva, 20 verificaciones): arma las filas de
+  `PG3-parametros-motor` desde la exportación de Aura del 13/11; el motor las toma (30
+  funciones, iguales al código) y los resultados de los PI3 no cambian; con el centro de
+  «plazo corto» en 90 h en el grafo, la urgencia del caso «urgente, dentro de 5 días» pasa
+  de 0,496 a 0,540 (el grafo manda); si falta una función, hay una sigma inválida o dos
+  valores para un término, usa el respaldo y lo informa. Rechaza los textos reales de E2E-9 y
+  E2E-10 y acepta la redacción correcta.
+- `prueba_devolucion_S2`, `prueba_devolucion_S4`, `prueba_correcciones_13nov`: pasan.
+  `python -m core.motor_difuso`: TODO COINCIDE CON LO PUBLICADO.
+
+### Pendiente: verificación contra Aura + Gemini (lo corre Sebastián)
+1. `python -m api.main --check` → «OK parámetros difusos: 30 funciones de pertenencia leidas de Neo4j».
+2. `python -m api.main --limpiar --si` y `python -m api.main --casos E2E-9 E2E-10 E2E-1 --pausa 10`.
+3. Si pasan, la corrida completa (`--casos --pausa 10`) para regenerar `pruebas/salida_e2e.md`.
+
+### 16/11, 15:40 — Primera corrida contra Aura + Gemini (E2E-9, E2E-10, E2E-1): 1/3
+- En los tres casos la traza dice «parámetros difusos: grafo — 30 funciones de pertenencia
+  leidas de Neo4j», sin diferencias con el código. E2E-1 pasa 16/16.
+- **E2E-10 (6/7)**: el LLM escribió «la categoría registrada no cambia», que el validador
+  acepta desde el 13/11 (B10), pero la verificación del caso buscaba solo «categoría no
+  cambia». Se alineó la verificación de `pruebas/casos_e2e.py` con el validador.
+- **E2E-9 (10/11)**: la redacción del LLM era buena (comparaba prioridades con Elena Sosa y
+  Ana Pérez y no mezclaba vencida con faltante), pero en los dos intentos omitió el nombre de
+  la categoría (regla A1, control que ya existía) y la respuesta cayó al respaldo A6, que no
+  comparaba con los vecinos. `submodulos/s4_explicacion.py` → `respaldo()`: cuando la pregunta
+  es por un candidato, agrega su posición por prioridad y por afinidad y la prioridad de quien
+  queda antes y después (con la diferencia), calculadas por Python.
+
+### 16/11, 15:48 — Segunda corrida: E2E-1 cae al respaldo por un falso positivo de CP1
+- La redacción del LLM era correcta («no tiene advertencias pero no tiene la aptitud deseable
+  manejo de residuos patogénicos»), pero el control 4 de `validar_s4` (CP1 del PI4 de S4:
+  deseable presentada como advertencia) la rechazaba porque «advertencias» estaba en la misma
+  cláusula, y repetía el motivo para los tres candidatos porque miraba todo el texto.
+- `core/validador.py`: solo rechaza si entre «advertencia» y la aptitud no aparece «aptitud» o
+  «deseable», y mira el tramo de texto de cada candidato. Lo mismo, al revés, para una
+  advertencia presentada como deseable. El caso original del PI4 («las advertencias sobre el
+  manejo de residuos…») se sigue rechazando (`prueba_devolucion_S4` y `prueba_devolucion_PG3`).
+
+### 16/11, 15:59 — Tercera corrida: todo pasa salvo una verificación de E2E-9
+- E2E-9 falló en «Dice que la aptitud deseable está vencida» (verificación agregada hoy): el
+  LLM no nombró la aptitud («el estado de sus aptitudes deseables»), así que no había nada que
+  decir vencido. La pregunta es por la posición, no por las aptitudes: la verificación pasa a
+  ser condicional (si nombra la aptitud, tiene que decir que está vencida), igual que el
+  control 7 de `validar_s4`. No es un cambio del sistema sino de la prueba.

@@ -521,6 +521,20 @@ RETURN elementId(a) AS desde, elementId(b) AS hasta, type(r) AS tipo, properties
 ORDER BY tipo
 """,
 
+    # PG3 (devolución del PG3, 16/11): parámetros que USA el motor difuso. Se lee al abrir
+    # la conexión (core/grafo.py) y se pasa a motor_difuso.usar_parametros_del_grafo().
+    # Solo la estructura Variable_Linguistica -> Termino -> Funcion_Pertenencia (la que
+    # mantiene --depurar) y solo gaussianas (las trapezoidales no tienen centro/sigma).
+    'PG3-parametros-motor': """
+MATCH (v:Variable_Linguistica)-[:TIENE_TERMINO]->(t:Termino)-[:DEFINIDO_POR]->(f:Funcion_Pertenencia)
+WHERE f.centro IS NOT NULL AND f.sigma IS NOT NULL
+RETURN v.nombre AS variable, t.nombre AS termino, f.forma AS forma,
+       f.centro AS centro, f.sigma AS sigma, f.lado AS lado,
+       f.centro2 AS centro2, f.sigma2 AS sigma2,
+       f.version AS version, f.estado_validacion AS estado
+ORDER BY variable, termino
+""",
+
     'PG3-parametros-difusos': """
 MATCH (v:Variable_Linguistica)
 OPTIONAL MATCH (v)-[:TIENE_TERMINO]->(t)

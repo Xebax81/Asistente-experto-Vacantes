@@ -15,6 +15,8 @@ from core.grafo import normalizar
 from core.llm import ErrorLLM, pedir_json
 from core.validador import validar_explicacion
 from submodulos import inferencia
+# PG3 (devolución del PG3, 16/11): los textos de respaldo tampoco muestran códigos del grafo.
+from submodulos.s4_explicacion import _legible_en_frase, legible
 
 INTENCIONES = ('ranking_afinidad', 'detalle_afinidad', 'comparar_candidatos',
                'datos_faltantes', 'simular_afinidad', 'fuera_de_dominio')
@@ -275,18 +277,27 @@ def _simular(detalle, sim):
     }
 
 
+def _valor(x):
+    """[a, a] -> «a»; [a, b] -> «entre a y b», con coma decimal (sin corchetes en el texto)."""
+    f = lambda v: f'{float(v):.3f}'.replace('.', ',') if isinstance(v, (int, float)) else str(v)
+    if isinstance(x, (list, tuple)) and len(x) == 2:
+        return f(x[0]) if x[0] == x[1] else f'entre {f(x[0])} y {f(x[1])}'
+    return f(x)
+
+
 def respaldo(datos, intencion):
     if datos.get('hipotetico'):
-        return (f"Simulación hipotética: la afinidad pasaría de {datos['base_grafo']} a "
-                f"{datos['simulada'][0]}. No se guarda y la categoría no cambia "
-                f"({datos.get('categoria_S4')}).")
+        return (f"Simulación hipotética: la afinidad pasaría de {_valor(datos['base_grafo'])} a "
+                f"{_valor(datos['simulada'])}. No se guarda y la categoría registrada no cambia "
+                f"({legible(datos.get('categoria_S4'))}).")
     if datos.get('motivos_descarte'):
         return (f"{datos.get('empleado')} quedó descartado en la preselección (S2): " +
-                '; '.join(datos['motivos_descarte']) + '. No hay afinidad que explicar.')
+                '; '.join(_legible_en_frase(m) for m in datos['motivos_descarte']) +
+                '. No hay afinidad que explicar.')
     if intencion == 'ranking_afinidad':
         filas = '; '.join(f"{c['empleado']} ({c['legajo']}) afinidad {c['afinidad']}, "
-                          f"categoría {c.get('categoria_S4')}" for c in datos.get('candidatos', []))
+                          f"categoría {legible(c.get('categoria_S4'))}" for c in datos.get('candidatos', []))
         return (f"Listado de {datos.get('servicio')}: {filas}. El criterio de orden es "
-                f"{datos.get('criterio_orden')} y todavía no fue validado por RR. HH.")
+                f"{legible(datos.get('criterio_orden'))} y todavía no fue validado por RR. HH.")
     return ('No se pudo redactar una explicación verificada. Datos del grafo: ' +
             json.dumps(datos, ensure_ascii=False, default=str)[:600])

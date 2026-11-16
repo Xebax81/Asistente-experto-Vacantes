@@ -28,6 +28,7 @@ El LLM no interviene en ningun punto de este archivo.
 from datetime import datetime
 
 from core import config
+from core.grafo import separar_deseables_vencidos
 from core.motor_difuso import (
     CORTE_RECOMENDADO, CORTE_RESERVAS, centroide, evaluar, intervalo, reglas,
     cercania, desempeno, experiencia, s4_clasificar,
@@ -189,6 +190,7 @@ def recalcular_puesto(grafo, puesto, persistir=True):
     validos, descartados, conteo = [], [], {}
 
     for fila in filas:
+        separar_deseables_vencidos(fila)    # PG3 (devolución del PG3): vencidas del PG2
         if (fila.get('estado_S2') or '').lower() != 'valido':
             descartados.append(fila)
             for motivo in fila.get('motivos_descarte') or []:

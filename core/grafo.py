@@ -27,6 +27,45 @@ class ErrorGrafo(RuntimeError):
     pass
 
 
+# PG3 (devolución del PG3, 16/11): el PG2 guardó las aptitudes deseables VENCIDAS dentro de
+# deseables_faltantes con el sufijo « (vencida)» (carga del PG2, línea 581), y su evidencia
+# dice «no posee la aptitud deseable … (vencida)». Así la explicación de S4 terminaba diciendo
+# «no tiene la aptitud deseable manejo de residuos patogénicos (vencida)» (E2E-9): una aptitud
+# vencida la persona la TIENE, pero vencida. El PG3 ya las guarda separadas
+# (deseables_vencidos); esto separa al leer las que quedaron del PG2, sin tocar el grafo.
+SUFIJO_VENCIDA = ' (vencida)'
+
+
+def separar_deseables_vencidos(registro):
+    """Mueve de deseables_faltantes a deseables_vencidos las que traen el sufijo del PG2.
+    Modifica y devuelve el mismo dict. Las evidencias (si ya están cargadas) se corrigen igual."""
+    if not isinstance(registro, dict):
+        return registro
+    faltan = list(registro.get('deseables_faltantes') or [])
+    marcadas = [x for x in faltan if isinstance(x, str) and x.endswith(SUFIJO_VENCIDA)]
+    if marcadas:
+        registro['deseables_faltantes'] = [x for x in faltan if x not in marcadas]
+        vencidas = list(registro.get('deseables_vencidos') or [])
+        for x in marcadas:
+            nombre = x[:-len(SUFIJO_VENCIDA)]
+            if nombre not in vencidas:
+                vencidas.append(nombre)
+        registro['deseables_vencidos'] = vencidas
+    for e in registro.get('evidencias') or []:
+        corregir_evidencia_vencida(e)
+    return registro
+
+
+def corregir_evidencia_vencida(e):
+    """Evidencia del PG2 «deseable_faltante» de una aptitud que en realidad está vencida."""
+    if isinstance(e, dict) and e.get('tipo') == 'deseable_faltante' and \
+            SUFIJO_VENCIDA.strip() in str(e.get('id') or ''):
+        apt = str(e['id']).split('Ev_deseable_', 1)[-1].split(SUFIJO_VENCIDA, 1)[0]
+        e['tipo'] = 'deseable_vencido'
+        e['detalle'] = f'El empleado tiene la aptitud deseable {apt}, pero vencida.'
+    return e
+
+
 class Traza:
     """Registro de todo lo que paso al responder una consulta."""
 
@@ -78,6 +117,24 @@ class Grafo:
         except Exception as e:
             self._driver.close()
             raise ErrorGrafo(_mensaje_conexion(e)) from e
+        self.parametros_difusos = self._cargar_parametros_difusos()
+
+    def _cargar_parametros_difusos(self):
+        """PG3 (devolución del PG3, 16/11): el grafo es la fuente efectiva de los parámetros
+        difusos. Se leen en cada conexión y el motor los usa desde ese momento; si faltan o
+        hay alguno inválido, el motor sigue con los del código y el motivo queda en la traza."""
+        from core import motor_difuso
+        if config.PARAMETROS_DIFUSOS == 'codigo':
+            origen = motor_difuso.usar_parametros_del_codigo('PARAMETROS_DIFUSOS=codigo en el .env')
+        else:
+            try:
+                filas = self.leer('PG3-parametros-motor')
+            except ErrorGrafo as e:
+                origen = motor_difuso.usar_parametros_del_codigo(f'no se pudieron leer del grafo: {e}')
+            else:
+                origen = motor_difuso.usar_parametros_del_grafo(filas)
+        self.traza.agregar('parametros_difusos', origen)
+        return origen
 
     def cerrar(self):
         self._driver.close()

@@ -3,9 +3,18 @@ AND = MIN, OR = MAX, NO = 1 - mu, implicacion MIN, agregacion MAX, defuzzificaci
 Los parametros son los de los PI3 de cada submodulo; las funciones de S3 v0.2 se conservan para recalcular
 casos viejos (las de cercania, experiencia y afinidad global estan reconstruidas desde valores publicados en el PI2 de S3).
 
-PG3: este archivo se trae SIN CAMBIOS desde el PG2. Es la unica fuente de las inferencias difusas
-del sistema integrado; ni los submodulos ni el LLM recalculan nada por su cuenta.
+PG3: es la unica fuente de las inferencias difusas del sistema integrado; ni los submodulos
+ni el LLM recalculan nada por su cuenta.
 Ejecutar `python -m core.motor_difuso` imprime la verificacion contra los valores publicados.
+
+PG3 (devolucion del PG3, 16/11): los PARAMETROS de las funciones gaussianas se toman del grafo.
+Al abrir la conexion, core/grafo.py lee las Funcion_Pertenencia y llama a
+usar_parametros_del_grafo(); desde ese momento el calculo usa los valores de Neo4j. Los de
+PARAMETROS_CODIGO quedan solo como respaldo: se usan si el grafo no tiene las 30 funciones
+completas y validas (o si PARAMETROS_DIFUSOS=codigo en el .env), y ese origen queda en ORIGEN
+y en la traza. Las reglas (antecedentes, consecuentes y operadores) siguen en este archivo, y
+las trapezoidales de S3 v0.2 (cercania, experiencia, afinidad global) tambien: el grafo guarda
+centro/sigma y no los cuatro vertices.
 """
 import math
 import numpy as np
@@ -45,20 +54,147 @@ def centroide_conjunto(altura, forma, n=1001):
     return float((ys * mu).sum() / mu.sum()) if mu.sum() > 0 else None
 
 
+# ------------------------------------------------------------------ parametros: grafo (fuente) y codigo (respaldo)
+SU, SD = 20.38, 1.274
+
+# (variable, termino) -> (centro, sigma, lado, centro2, sigma2), con los nombres del grafo.
+# lado 'izq'/'der' = hombro (vale 1 de ese lado del centro); centro2/sigma2 = gaussiana de dos
+# lados con meseta entre centro y centro2. Son los valores verificados contra los PI3.
+PARAMETROS_CODIGO = {
+    # S1 (PI3 de S1)
+    ('plazo_cobertura', 'inmediato'): (12, 22, 'izq', None, None),
+    ('plazo_cobertura', 'corto'): (62, 20, None, None, None),
+    ('plazo_cobertura', 'amplio'): (112, 22, 'der', None, None),
+    ('premura_expresada', 'leve'): (2, 1.3, 'izq', None, None),
+    ('premura_expresada', 'moderada'): (5, 1.3, None, None, None),
+    ('premura_expresada', 'fuerte'): (8, 1.3, 'der', None, None),
+    ('urgencia_pedido', 'baja'): (0.10, 0.17, 'izq', None, None),
+    ('urgencia_pedido', 'media'): (0.50, 0.17, None, None, None),
+    ('urgencia_pedido', 'alta'): (0.90, 0.17, 'der', None, None),
+    # S3 v0.3 (PI3 de S3)
+    ('urgencia', 'alta'): (12, SU, 'izq', None, None),
+    ('urgencia', 'media'): (60, SU, None, None, None),
+    ('urgencia', 'baja'): (108, SU, 'der', None, None),
+    ('desempeno_reciente', 'bajo'): (3.5, SD, 'izq', None, None),
+    ('desempeno_reciente', 'medio'): (6.5, SD, None, None, None),
+    ('desempeno_reciente', 'alto'): (9.5, SD, 'der', None, None),
+    # S2 grupo V (PI3 de S2)
+    ('margen_vigencia', 'critico'): (0, 6, None, 7, 6),
+    ('margen_vigencia', 'por_vencer'): (35, 12, None, None, None),
+    ('margen_vigencia', 'holgado'): (75, 12, None, 120, 12),
+    ('solape_horario', 'insuficiente'): (0, 0.08, None, 0.3, 0.08),
+    ('solape_horario', 'parcial'): (0.6, 0.1, None, None, None),
+    ('solape_horario', 'total'): (0.85, 0.06, None, 1.0, 0.06),
+    # S4 (PI3 de S4, version S4-FZ-v1)
+    ('afinidad', 'baja'): (0.00, 0.340, None, None, None),
+    ('afinidad', 'intermedia'): (0.55, 0.127, None, None, None),
+    ('afinidad', 'alta'): (1.00, 0.255, None, None, None),
+    ('confiabilidad', 'baja'): (0.55, 0.127, 'izq', None, None),
+    ('confiabilidad', 'media'): (0.80, 0.085, None, None, None),
+    ('confiabilidad', 'alta'): (1.00, 0.085, None, None, None),
+    ('prioridad_recomendacion', 'Baja_prioridad'): (0.15, 0.10, None, None, None),
+    ('prioridad_recomendacion', 'Recomendado_con_reservas'): (0.50, 0.10, None, None, None),
+    ('prioridad_recomendacion', 'Recomendado'): (0.85, 0.10, None, None, None),
+}
+
+_P = dict(PARAMETROS_CODIGO)
+ORIGEN = {'fuente': 'codigo', 'detalle': 'todavia no se leyeron del grafo', 'diferencias': []}
+
+
+def _num(x):
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def usar_parametros_del_grafo(filas):
+    """Toma del grafo los parametros de las 30 funciones gaussianas.
+
+    filas: [{variable, termino, centro, sigma, lado, centro2, sigma2}] (consulta
+    PG3-parametros-motor). Todo o nada: si falta una funcion, esta repetida o tiene un valor
+    invalido, se siguen usando los de PARAMETROS_CODIGO y se informa el motivo (para no
+    calcular con una mezcla de las dos fuentes).
+    Devuelve ORIGEN: {'fuente': 'grafo' | 'codigo (respaldo)', 'detalle', 'diferencias'}.
+    """
+    global _P
+    nuevo, motivos = {}, []
+    for f in filas or []:
+        clave = (f.get('variable'), f.get('termino'))
+        if clave not in PARAMETROS_CODIGO:
+            continue                        # funciones que el motor no usa (p. ej. otras versiones)
+        c, s = _num(f.get('centro')), _num(f.get('sigma'))
+        lado = f.get('lado')
+        c2, s2 = f.get('centro2'), f.get('sigma2')
+        c2 = None if c2 is None else _num(c2)
+        s2 = None if s2 is None else _num(s2)
+        if c is None or s is None or s <= 0:
+            motivos.append(f'{clave[0]}/{clave[1]}: centro o sigma invalido ({f.get("centro")}, {f.get("sigma")})')
+            continue
+        if lado not in (None, 'izq', 'der'):
+            motivos.append(f'{clave[0]}/{clave[1]}: lado desconocido «{lado}»')
+            continue
+        if (f.get('centro2') is None) != (f.get('sigma2') is None) or \
+                (f.get('centro2') is not None and (c2 is None or s2 is None or s2 <= 0 or c2 < c)):
+            motivos.append(f'{clave[0]}/{clave[1]}: segunda gaussiana incompleta o invalida')
+            continue
+        valor = (c, s, lado, c2, s2)
+        if clave in nuevo and nuevo[clave] != valor:
+            motivos.append(f'{clave[0]}/{clave[1]}: el grafo tiene dos funciones distintas')
+            continue
+        nuevo[clave] = valor
+    faltan = [k for k in PARAMETROS_CODIGO if k not in nuevo]
+    if faltan:
+        motivos.append(f'faltan {len(faltan)} funciones en el grafo: ' +
+                       ', '.join(f'{v}/{t}' for v, t in faltan[:5]) + ('…' if len(faltan) > 5 else ''))
+    if motivos:
+        _P = dict(PARAMETROS_CODIGO)
+        ORIGEN.update(fuente='codigo (respaldo)', detalle='; '.join(motivos), diferencias=[])
+        return dict(ORIGEN)
+    diferencias = []
+    for k, v in nuevo.items():
+        cod = PARAMETROS_CODIGO[k]
+        if any((a is None) != (b is None) or (a is not None and not isinstance(a, str)
+                                              and abs(float(a) - float(b)) > 1e-9)
+               or (isinstance(a, str) and a != b) for a, b in zip(v, cod)):
+            diferencias.append(f'{k[0]}/{k[1]}: grafo {v[:2]} vs codigo {cod[:2]}')
+    _P = nuevo
+    ORIGEN.update(fuente='grafo', detalle=f'{len(nuevo)} funciones de pertenencia leidas de Neo4j',
+                  diferencias=diferencias)
+    return dict(ORIGEN)
+
+
+def usar_parametros_del_codigo(motivo='PARAMETROS_DIFUSOS=codigo'):
+    """Vuelve a los parametros del codigo (respaldo o reproduccion de resultados viejos)."""
+    global _P
+    _P = dict(PARAMETROS_CODIGO)
+    ORIGEN.update(fuente='codigo (respaldo)', detalle=motivo, diferencias=[])
+    return dict(ORIGEN)
+
+
+def parametro(variable, termino):
+    return _P[(variable, termino)]
+
+
+def mu(variable, termino, x):
+    """Grado de pertenencia con el parametro vigente (del grafo, o del codigo como respaldo)."""
+    c, s, lado, c2, s2 = _P[(variable, termino)]
+    if c2 is not None:
+        return g2(x, c, s, c2, s2)
+    return g(x, c, s, lado)
+
+
 # ------------------------------------------------------------------ S1: urgencia del pedido (PI3 de S1)
 def s1_plazo(p):
-    return {'inmediato': g(p, 12, 22, 'izq'), 'corto': g(p, 62, 20), 'amplio': g(p, 112, 22, 'der')}
+    return {t: mu('plazo_cobertura', t, p) for t in ('inmediato', 'corto', 'amplio')}
 
 
 def s1_premura(m):
-    return {'leve': g(m, 2, 1.3, 'izq'), 'moderada': g(m, 5, 1.3), 'fuerte': g(m, 8, 1.3, 'der')}
+    return {t: mu('premura_expresada', t, m) for t in ('leve', 'moderada', 'fuerte')}
 
 
-S1_SAL = {
-    'baja': lambda y: g(y, 0.10, 0.17, 'izq'),
-    'media': lambda y: g(y, 0.50, 0.17),
-    'alta': lambda y: g(y, 0.90, 0.17, 'der'),
-}
+S1_SAL = {t: (lambda y, t=t: mu('urgencia_pedido', t, y)) for t in ('baja', 'media', 'alta')}
 
 
 def s1_reglas(p=None, m=None):
@@ -101,19 +237,18 @@ def s1_urgencia(p=None, m=None):
 
 
 # ------------------------------------------------------------------ S2/S3: afinidad (PI2/PI3 de S3 y PI3 de S2)
-SU, SD = 20.38, 1.274
 
 
 def urgencia(h, ver='0.3'):
     if ver == '0.2':
         return {'alta': trap(h, 0, 0, 24, 48), 'media': trap(h, 24, 60, 60, 96), 'baja': trap(h, 72, 120, 168, 168)}
-    return {'alta': g(h, 12, SU, 'izq'), 'media': g(h, 60, SU), 'baja': g(h, 108, SU, 'der')}
+    return {t: mu('urgencia', t, h) for t in ('alta', 'media', 'baja')}
 
 
 def desempeno(d, ver='0.3'):
     if ver == '0.2':
         return {'bajo': trap(d, 1, 1, 4, 6), 'medio': trap(d, 4.5, 6.5, 6.5, 8.5), 'alto': trap(d, 7, 8.5, 10, 10)}
-    return {'bajo': g(d, 3.5, SD, 'izq'), 'medio': g(d, 6.5, SD), 'alto': g(d, 9.5, SD, 'der')}
+    return {t: mu('desempeno_reciente', t, d) for t in ('bajo', 'medio', 'alto')}
 
 
 def cercania(m):
@@ -125,11 +260,11 @@ def experiencia(m):
 
 
 def margen(dias):
-    return {'critico': g2(dias, 0, 6, 7, 6), 'por_vencer': g(dias, 35, 12), 'holgado': g2(dias, 75, 12, 120, 12)}
+    return {t: mu('margen_vigencia', t, dias) for t in ('critico', 'por_vencer', 'holgado')}
 
 
 def solape(f):
-    return {'insuficiente': g2(f, 0, 0.08, 0.3, 0.08), 'parcial': g(f, 0.6, 0.1), 'total': g2(f, 0.85, 0.06, 1.0, 0.06)}
+    return {t: mu('solape_horario', t, f) for t in ('insuficiente', 'parcial', 'total')}
 
 
 AFIN = {'baja': (0, 0, 0, 0.5), 'media': (0.3, 0.5, 0.5, 0.7), 'alta': (0.5, 1, 1, 1)}
@@ -195,17 +330,14 @@ def intervalo(ug, e_m, d_rng, c_rng, mg_rng=(120, 120), so_rng=(1.0, 1.0), ver='
 
 
 # ------------------------------------------------------------------ S4: prioridad de recomendacion (PI3 de S4, version S4-FZ-v1)
-S4_PARAM = {
-    'afinidad': {'baja': (0.00, 0.340, None), 'intermedia': (0.55, 0.127, None), 'alta': (1.00, 0.255, None)},
-    'confiabilidad': {'baja': (0.55, 0.127, 'izq'), 'media': (0.80, 0.085, None), 'alta': (1.00, 0.085, None)},
-}
-S4_SAL = {'Baja_prioridad': (0.15, 0.10), 'Recomendado_con_reservas': (0.50, 0.10), 'Recomendado': (0.85, 0.10)}
-S4_FORMA = {k: (lambda y, c=c, s=s: g(y, c, s)) for k, (c, s) in S4_SAL.items()}
+S4_TERMINOS = {'afinidad': ('baja', 'intermedia', 'alta'), 'confiabilidad': ('baja', 'media', 'alta')}
+S4_SAL = ('Baja_prioridad', 'Recomendado_con_reservas', 'Recomendado')
+S4_FORMA = {k: (lambda y, k=k: mu('prioridad_recomendacion', k, y)) for k in S4_SAL}
 DELTA_TRANSICION = 0.20
 
 
 def s4_grados(var, x):
-    return {t: g(x, c, s, l) for t, (c, s, l) in S4_PARAM[var].items()}
+    return {t: mu(var, t, x) for t in S4_TERMINOS[var]}
 
 
 def s4_reglas(a, c, adv):

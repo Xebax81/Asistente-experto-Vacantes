@@ -163,6 +163,7 @@ determinístico de respaldo (regla A6) y el `--check` avisa cuál falta.
 | `python -m core.motor_difuso` | Verifica el motor difuso contra los valores publicados en los PI3 |
 | `python -m pruebas.prueba_devolucion_S2` | Devolución del PI4 de S2 (18 verificaciones), sin Neo4j ni LLM |
 | `python -m pruebas.prueba_devolucion_S4` | Devolución del PI4 de S4 (15 verificaciones), sin Neo4j ni LLM |
+| `python -m pruebas.prueba_devolucion_PG3` | Devolución del PG3: parámetros difusos desde el grafo (con la exportación de Aura) y vencida ≠ faltante en S4, sin Neo4j ni LLM |
 
 ### Cómo reproducir las pruebas
 
@@ -233,6 +234,7 @@ pg3_asistente/
 ├─ pruebas/
 │  ├─ casos_e2e.py       15 casos: 6 pedidos (cadena S1→S4), 4 consultas por submódulo, 5 de error
 │  ├─ prueba_devolucion_S2.py, prueba_devolucion_S4.py   sin Neo4j ni LLM
+│  ├─ prueba_devolucion_PG3.py   devolución del PG3, sin Neo4j ni LLM
 ├─ neo4j/                scripts de carga (PG2 + complemento de S1) y exportación del grafo
 └─ CAMBIOS.md            registro de correcciones del PG3
 ```
@@ -286,6 +288,11 @@ Van al informe, en la sección de evaluación crítica:
   contexto anterior.
 - **Coincidencia por palabras completas**: tolera artículos y mayúsculas, pero no errores
   de tipeo en nombres de servicios ni de personas.
-- **Parámetros difusos en el código.** El motor usa los parámetros verificados contra los
-  PI3; `--depurar --aplicar` los escribe en el grafo y `--check` controla que coincidan,
-  pero la fuente que usa el cálculo es el código.
+- **Parámetros difusos.** Desde el 16/11 (devolución del PG3) el motor toma del grafo los
+  parámetros de las 30 funciones gaussianas (consulta `PG3-parametros-motor`, al abrir cada
+  conexión); los del código quedan como respaldo si el grafo no las tiene completas y válidas,
+  y el origen se ve en `--check` y en el panel de trazabilidad. Siguen en el código las reglas
+  difusas (antecedentes, consecuentes, operadores), las trapezoidales de S3 (cercanía,
+  experiencia) y los cortes de S4 (0,367 y 0,610), que se calibraron con los parámetros del PI3.
+  `--depurar --aplicar` escribe en el grafo los valores del código: es la carga inicial, y
+  si después se edita el grafo, volver a correrlo pisa esa edición.

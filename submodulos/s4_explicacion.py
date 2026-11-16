@@ -14,7 +14,7 @@ import re
 
 from core import config, prompts
 from core.prompts import PromptFaltante
-from core.grafo import normalizar
+from core.grafo import corregir_evidencia_vencida, normalizar, separar_deseables_vencidos
 from core.llm import ErrorLLM, pedir_json
 from core.validador import validar_explicacion, validar_s4
 
@@ -300,7 +300,7 @@ def _evidencias(grafo, fichas):
         return
     por = {}
     for fila in grafo.leer('S4-EV-evidencias', evaluaciones=[f['evaluacion'] for f in fichas]):
-        e = dict(fila['evidencia'])
+        e = corregir_evidencia_vencida(dict(fila['evidencia']))   # PG3 (devolución del PG3)
         e['tiene_valor'] = (e.get('valor') is not None or e.get('valor_min') is not None)
         por.setdefault(fila['evaluacion'], []).append(e)
     for f in fichas:
@@ -365,7 +365,7 @@ def responder(grafo, texto, extraido=None):
                 'datos': fila_vacio, 'respuesta': mensaje_listado_vacio(grafo, puesto['puesto']),
                 'fidelidad': 'sin LLM (A3)'}
 
-    fichas = [f['ficha'] for f in grafo.leer(
+    fichas = [separar_deseables_vencidos(f['ficha']) for f in grafo.leer(
         'S4-E-fichas', puesto=puesto['puesto'], legajo=legajo,
         categoria=filtros.get('categoria'),
         solo_con_advertencias=bool(filtros.get('solo_con_advertencias')))]
@@ -394,7 +394,7 @@ def responder(grafo, texto, extraido=None):
         if legajo:
             tipo = 'candidato'
             traza = grafo.una('S4-C-traza', evaluacion=fichas[0]['evaluacion'])
-            otros = [f['ficha'] for f in grafo.leer(
+            otros = [separar_deseables_vencidos(f['ficha']) for f in grafo.leer(
                 'S4-E-fichas', puesto=puesto['puesto'], legajo=None, categoria=None,
                 solo_con_advertencias=False)]
             datos = {'fichas': fichas, 'traza_categoria': (traza or {}).get('traza'),
@@ -512,6 +512,25 @@ def respaldo(datos, tipo):
                             'no hay un ganador')
         if detalles:
             lineas.append('   ' + '; '.join(detalles))
+        lineas.append('')
+    # PG3 (devolución del PG3, 16/11): si la pregunta es por un candidato, el respaldo también
+    # explica su posición comparando prioridades con quien queda antes y después (antes solo
+    # lo hacía la redacción del LLM; en E2E-9 el LLM falló dos veces y la comparación se perdió).
+    co = datos.get('comparacion_orden') if tipo == 'candidato' else None
+    if co:
+        yo = next((x for x in co.get('listado_por_prioridad') or []
+                   if x.get('legajo') == co.get('candidato')), {})
+        if yo:
+            texto = (f"{yo.get('empleado')} queda en la posición {yo.get('posicion_por_prioridad')} "
+                     f"por prioridad ({_num(yo.get('prioridad'))})")
+            if yo.get('posicion_por_afinidad') and \
+                    yo.get('posicion_por_afinidad') != yo.get('posicion_por_prioridad'):
+                texto += f" y en la posición {yo.get('posicion_por_afinidad')} por afinidad"
+            lineas.append(texto + '.')
+        for v in co.get('vecinos') or []:
+            lineas.append(f"{v.get('empleado')} ({v.get('legajo')}) {v.get('relacion')}, con prioridad "
+                          f"{_num(v.get('prioridad'))} (diferencia {_num(v.get('diferencia_de_prioridad'))}).")
+        lineas.append('El listado se ordena por prioridad, no por afinidad.')
         lineas.append('')
     lineas.append('El criterio de orden es provisional y todavía no fue validado por RR. HH. '
                   'La decisión final es del reclutador.')
