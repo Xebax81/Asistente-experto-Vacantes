@@ -180,7 +180,7 @@ ORDER BY puesto
     'S2-Q2b-puestos-registrados': """
 MATCH (p:Puesto_Vacante)-[:PERTENECE_A]->(s:Servicio)
 OPTIONAL MATCH (p)-[:EN_TURNO]->(t:Turno)
-RETURN p.id AS puesto, s.nombre AS servicio, t.nombre AS turno
+RETURN p.id AS puesto, s.nombre AS servicio, t.nombre AS turno, p.origen AS origen
 ORDER BY puesto
 """,
 

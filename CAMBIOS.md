@@ -360,10 +360,44 @@ autenticación: es un prototipo local (declararlo como límite en el informe).
 - `python -m core.motor_difuso`: TODO COINCIDE CON LO PUBLICADO.
 - Todos los módulos compilan; `web/app.js` pasa `node --check`.
 
+#### Verificación contra Aura + Gemini (13/11, 22:00, servidor reiniciado)
+Casos del informe que fallaban, por la API de la interfaz web:
+- T33 «…Supermercado Norte para ayer»: urgencia alta (0,824) y Diego Ruiz como candidato. OK.
+- T13 «Necesito cubrir un turno, urgente.»: «El pedido no indica el servicio ni el turno»; no
+  pregunta la zona; fidelidad de S1 visible. OK.
+- T16 zona «Chacras»: «queda en espera porque falta la zona», sin rutas de campos. OK.
+- T18 + T19: la aclaración «¿A cuál…?» contestada con «pv_001» devuelve el motivo de Bruno
+  Gómez (S2-R03). OK.
+- T32 «…para el lunes»: urgencia media (0,478), «Se evaluaron 7 empleados», «Urgencia
+  registrada: media». OK.
+- T21 (S3, Valeria Núñez): sin DESCONOCIDO, sin corchetes, categoría con palabras. OK.
+- T22 (simulación): «la categoría registrada no cambia»; tarjeta 0,601 → 0,307, «traslado:
+  90 min · experiencia: 24 meses». OK.
+- T27 «Godoy Cruz» sin pedido: «No hay ningún pedido esperando un dato…». OK.
+- T35 texto de 2500 caracteres: 400 con el aviso de máximo 2000. OK.
+- T38 ventana de 532 px: el panel de trazabilidad queda debajo del chat. OK.
+- B01, camino nuevo: «Necesito cubrir el turno noche en la Clínica Luján.» → pregunta el plazo;
+  «dentro de tres días» → continuación, plazo 72 h (fuente calendario_PG3), urgencia media y
+  listado con Tomás Aguirre y Valeria Núñez. OK.
+- Caso 1: aparece la línea de S2-R01 sobre limpieza hospitalaria. OK.
+- API: `/api/recalcular/pv_999` → 404; `/api/reiniciar` sin texto → 200; cabecera «gemini ·
+  modelo automático · Neo4j OK».
+
+Observaciones que quedan (no son de estos cambios): en T33 y en el caso 1 la explicación de S4
+cayó al respaldo A6 por reglas que ya existían (una cita con el punto medio 0,504 y «falta la
+prioridad de E104» al comparar el orden); el listado que se muestra es el correcto. En T22 el
+modelo escribió 0,306 (la tarjeta dice 0,307) y describió la regla de experiencia al revés.
+
 #### Pendiente
-- **Reiniciar el servidor** (`python -m api.main`): no tiene recarga automática.
-- Volver a correr contra Aura + Gemini: `--limpiar --si`, `--casos --pausa 10` y los casos del
-  informe que fallaban (T13, T16, T18–T19, T21–T22, T32, T33, T35, T38). El validador ahora es
-  más estricto (B04/B09): si alguna explicación cae al respaldo A6 más que antes, mirar los
-  motivos en el panel de trazabilidad.
+- Correr `--limpiar --si` y después `--casos --pausa 10` para regenerar `pruebas/salida_e2e.md`.
 - Decidir en grupo si se mantiene el cambio de criterio de S1-R01 (B01: pedir el plazo).
+
+## 16/11 — Interfaz: vacantes a pedido y botón para limpiarlas
+
+- La lista de vacantes ya no aparece fija debajo del chat: se abre con **«+ Vacantes (n)»**,
+  igual que los casos de prueba, como tabla (puesto, servicio, turno, origen PG2/asistente).
+- Botón chico **«Limpiar vacantes»**: pide confirmación y borra las vacantes creadas por el
+  asistente (`origen = 'PG3'`) con sus pedidos, evaluaciones, evidencias y listados. Las tres
+  del PG2 no se tocan. Nuevo endpoint `POST /api/limpiar-vacantes` (mismas consultas que
+  `--limpiar --si`: `PG3-datos-de-prueba` y `W-PG3-borrar-pruebas`).
+- `S2-Q2b-puestos-registrados` devuelve además `p.origen` (solo lectura; los demás usos no cambian).

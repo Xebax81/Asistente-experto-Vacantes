@@ -291,3 +291,16 @@ pre.cypher,.cypher{color:var(--cita)}
 .sentencia summary{cursor:pointer;font-size:.8em;color:var(--tenue);margin-top:2px}
 .sentencia summary:hover{color:var(--acento)}
 .sentencia pre{white-space:pre-wrap}
+
+/* vacantes registradas: se muestran solo a pedido, como los casos de prueba */
+.vacantes{margin:0 28px 12px;padding:10px;max-height:40vh;overflow-y:auto;
+  border:1px solid var(--borde);border-radius:var(--r);background:var(--panel);font-size:11.5px}
+.vacantes[hidden]{display:none}
+.vacantes table{width:100%;border-collapse:collapse}
+.vacantes th{text-align:left;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--tenue2);padding:4px 8px;border-bottom:1px solid var(--borde)}
+.vacantes td{padding:4px 8px;color:var(--tenue);border-bottom:1px solid var(--borde)}
+.vacantes-vacio{color:var(--tenue2)}
+.ejemplos-toggle.peligro{padding:4px 9px;font-size:9.5px}
+.ejemplos-toggle.peligro:hover{color:#e5484d;border-color:#e5484d}
+@media (max-width:980px){.vacantes{margin:0 16px 12px}}

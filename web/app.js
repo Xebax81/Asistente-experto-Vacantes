@@ -429,17 +429,52 @@ $('#reiniciar').onclick = async () => {
   campo.focus();
 };
 
+// Las vacantes se muestran solo si se piden, igual que los casos de prueba.
+const cajaVacantes = $('#vacantes');
+const botonVacantes = $('#verVacantes');
+let totalVacantes = null;
+function mostrarVacantes(abrir) {
+  cajaVacantes.hidden = !abrir;
+  botonVacantes.setAttribute('aria-expanded', String(abrir));
+  const n = totalVacantes === null ? '' : ` (${totalVacantes})`;
+  botonVacantes.textContent = abrir ? '− Ocultar vacantes' : `+ Vacantes${n}`;
+  if (abrir) mostrarEjemplos(false);
+}
+botonVacantes.onclick = () => mostrarVacantes(cajaVacantes.hidden);
+botonEjemplos.addEventListener('click', () => { if (!cajaEjemplos.hidden) mostrarVacantes(false); });
+
 function cargarPuestos() {
   fetch('/api/puestos').then((r) => r.json()).then((d) => {
     const lista = d.puestos || [];
-    const el = $('#puestos');
-    if (!lista.length) { el.textContent = 'sin vacantes registradas'; return; }
-    el.innerHTML = 'Vacantes: ' + lista.map((p) =>
-      `<span title="${esc(p.servicio)} · turno ${esc(p.turno)}">${esc(p.puesto)}</span>`).join(' · ');
-    el.title = lista.map((p) => `${p.puesto}: ${p.servicio}, turno ${p.turno}`).join('\n');
+    totalVacantes = lista.length;
+    cajaVacantes.innerHTML = lista.length
+      ? '<table><thead><tr><th>Puesto</th><th>Servicio</th><th>Turno</th><th>Origen</th></tr></thead><tbody>' +
+        lista.map((p) => `<tr><td>${esc(p.puesto)}</td><td>${esc(p.servicio)}</td>
+          <td>${esc(p.turno || '–')}</td><td>${p.origen === 'PG3' ? 'asistente' : 'PG2'}</td></tr>`).join('') +
+        '</tbody></table>'
+      : '<div class="vacantes-vacio">No hay vacantes registradas.</div>';
+    mostrarVacantes(!cajaVacantes.hidden);
   }).catch(() => {});
 }
 cargarPuestos();
+
+$('#limpiarVacantes').onclick = async () => {
+  if (!confirm('¿Borrar las vacantes que registró el asistente?\n\n' +
+      'Se borran con sus pedidos, evaluaciones, evidencias y listados. ' +
+      'Las vacantes del PG2 no se tocan.')) return;
+  try {
+    const res = await fetch('/api/limpiar-vacantes', { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || res.statusText);
+    const n = (d.borradas || []).length;
+    agregar('asistente', n
+      ? `Se borraron ${n} vacante${n > 1 ? 's' : ''} creada${n > 1 ? 's' : ''} por el asistente: ${esc(d.borradas.join(', '))}.`
+      : 'No había vacantes creadas por el asistente para borrar.');
+  } catch (e) {
+    agregar('asistente error', 'No se pudieron borrar las vacantes: ' + esc(e.message));
+  }
+  cargarPuestos();
+};
 
 fetch('/api/estado').then((r) => r.json()).then((e) => {
   const el = $('#estado');

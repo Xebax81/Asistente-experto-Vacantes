@@ -105,6 +105,22 @@ def api_recalcular(puesto: str):
     return r
 
 
+@app.post('/api/limpiar-vacantes')
+def api_limpiar_vacantes():
+    """Borra las vacantes que creó el asistente (origen = 'PG3'); las del PG2 quedan.
+
+    Es lo mismo que «python -m api.main --limpiar --si», desde la interfaz web.
+    """
+    try:
+        with Grafo() as g:
+            filas = g.leer('PG3-datos-de-prueba')
+            if filas:
+                g.escribir('W-PG3-borrar-pruebas')
+    except ErrorGrafo as e:
+        return JSONResponse({'error': str(e)}, status_code=503)
+    return {'borradas': [f['puesto'] for f in filas]}
+
+
 @app.get('/api/estado')
 def api_estado():
     estado = {'config': config.resumen(), 'prompts_faltantes': prompts.faltantes()}

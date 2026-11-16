@@ -42,9 +42,13 @@
               aria-expanded="false" aria-controls="ejemplos">+ Casos de prueba</button>
       <button type="button" class="ejemplos-toggle" id="reiniciar"
               title="Olvida el pedido que quedó esperando un dato y empieza una conversación nueva">Empezar de nuevo</button>
-      <span class="puestos" id="puestos" title="Vacantes registradas en Neo4j"></span>
+      <button type="button" class="ejemplos-toggle" id="verVacantes"
+              aria-expanded="false" aria-controls="vacantes">+ Vacantes</button>
+      <button type="button" class="ejemplos-toggle peligro" id="limpiarVacantes"
+              title="Borra las vacantes que registró el asistente. Las tres del PG2 no se tocan.">Limpiar vacantes</button>
     </div>
     <div class="ejemplos" id="ejemplos" hidden></div>
+    <div class="vacantes" id="vacantes" hidden></div>
 
     <form class="entrada" id="formulario">
       <textarea id="texto" rows="2" maxlength="2000" placeholder="Escribí tu consulta…  (Enter envía, Shift+Enter hace salto de línea)"></textarea>
