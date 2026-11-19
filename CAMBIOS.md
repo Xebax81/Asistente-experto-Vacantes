@@ -509,3 +509,13 @@ código: `PARAMETROS_DIFUSOS=codigo` en el `.env`. Los archivos dependen entre s
   decir vencido. La pregunta es por la posición, no por las aptitudes: la verificación pasa a
   ser condicional (si nombra la aptitud, tiene que decir que está vencida), igual que el
   control 7 de `validar_s4`. No es un cambio del sistema sino de la prueba.
+
+---
+
+## 19/11 — S4 caía siempre al respaldo por la cita de afinidad
+
+**Síntoma (página online):** «La cita Ev_afinidad_EV-E104-pv_… declara el valor 0.5593, que no figura en los datos» → respaldo A6.
+
+**Causa:** contradicción interna. El prompt de S4 (`prompts/prompt_explicacion.txt`, regla de "valor") pide citar la afinidad imprecisa por el **punto medio** del intervalo, y la consulta `S4-F-fidelidad` lo verifica así; pero el control de citas en Python (`core/validador.py`, paso 5) solo aceptaba cifras que estuvieran literalmente en la ficha (mínimo y máximo). Con intervalo de ancho mayor a 0,01, el punto medio nunca pasaba.
+
+**Arreglo:** `_medios_afinidad()` agrega los puntos medios de las evidencias tipo afinidad (y del campo `afinidad` de cada ficha) a los valores admitidos **solo para las citas**. En el texto la afinidad imprecisa sigue yendo como «entre mínimo y máximo»; una cifra inventada en una cita se sigue rechazando. Respaldo del archivo anterior: `core/validador_antes_devCitas.py`. Pruebas S2, S4, PG3 y 13/11: todas pasan.

@@ -179,6 +179,11 @@ def validar_explicacion(datos, ficha, exigencias=None, grafo=None, evaluaciones=
         motivos.append('Falta al menos una cita que respalde la explicación.')
 
     textos_ficha = _textos(ficha)
+    # La afinidad imprecisa se cita por el punto medio del intervalo (lo pide el prompt de
+    # S4 y lo verifica así la consulta S4-F-fidelidad). Ese punto medio no figura literal en
+    # la ficha, así que se agrega a los valores admitidos SOLO para las citas: en el texto
+    # la afinidad imprecisa se sigue escribiendo como «entre mínimo y máximo».
+    permitidos_citas = permitidos | _medios_afinidad(ficha)
     for cita in citas if isinstance(citas, list) else []:
         if not isinstance(cita, dict):
             continue
@@ -187,8 +192,8 @@ def validar_explicacion(datos, ficha, exigencias=None, grafo=None, evaluaciones=
         if valor is None:
             continue
         if isinstance(valor, (int, float)) and not isinstance(valor, bool):
-            if f'{valor:g}' not in permitidos and not any(
-                    _es_num(p) and abs(float(valor) - float(p)) < 0.005 for p in permitidos):
+            if f'{valor:g}' not in permitidos_citas and not any(
+                    _es_num(p) and abs(float(valor) - float(p)) < 0.005 for p in permitidos_citas):
                 motivos.append(f'La cita {campo} declara el valor {valor}, que no figura en los datos.')
         elif isinstance(valor, str) and _sin_tildes(valor) not in textos_ficha:
             motivos.append(f'La cita {campo} declara «{valor}», que no figura en los datos.')
@@ -207,6 +212,26 @@ def validar_explicacion(datos, ficha, exigencias=None, grafo=None, evaluaciones=
                                    'con el del grafo.')
 
     return motivos
+
+
+def _medios_afinidad(obj, acum=None):
+    """Puntos medios de los intervalos de afinidad: evidencias tipo 'afinidad' con
+    valor_min/valor_max y el campo 'afinidad' [min, max] de las fichas."""
+    acum = acum if acum is not None else set()
+    if isinstance(obj, dict):
+        lo, hi = obj.get('valor_min'), obj.get('valor_max')
+        if obj.get('tipo') == 'afinidad' and _es_num(lo) and _es_num(hi):
+            acum.add(f'{round((float(lo) + float(hi)) / 2.0, 4):g}')
+        af = obj.get('afinidad')
+        if (isinstance(af, (list, tuple)) and len(af) == 2
+                and all(_es_num(x) and not isinstance(x, bool) for x in af)):
+            acum.add(f'{round((float(af[0]) + float(af[1])) / 2.0, 4):g}')
+        for v in obj.values():
+            _medios_afinidad(v, acum)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _medios_afinidad(v, acum)
+    return acum
 
 
 def _es_num(s):
